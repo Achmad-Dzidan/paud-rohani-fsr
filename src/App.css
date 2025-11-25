@@ -100,6 +100,7 @@ input, .form-control {
     font-size: 14px; outline: none;
     transition: border-color 0.2s;
     background: white;
+    color: #000;
 }
 /* Input tanpa wrapper icon (seperti di form Income) */
 .form-control { padding: 14px; } 

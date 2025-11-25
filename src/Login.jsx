@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
 import { Toaster, toast } from 'sonner';
+import { useNavigate } from 'react-router-dom'; // 1. IMPORT NAVIGATE
 import './App.css'; 
 
 // Import fungsi Firebase
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth } from './firebase'; 
 
-function App() {
+function Login() { // Ubah nama function jadi Login agar rapi
+  const navigate = useNavigate(); // 2. INISIALISASI NAVIGATE
+  
   const [isLoginMode, setIsLoginMode] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -18,16 +21,35 @@ function App() {
 
     try {
       if (isLoginMode) {
+        // --- LOGIKA LOGIN ---
         await signInWithEmailAndPassword(auth, email, password);
+        
         toast.success('Login Berhasil! Mengalihkan...');
-        // Logika redirect bisa ditambahkan di sini
+        
+        // 3. PINDAH KE DASHBOARD SETELAH 1 DETIK (Agar toast terbaca)
+        setTimeout(() => {
+            navigate('/dashboard'); 
+        }, 1000);
+
       } else {
+        // --- LOGIKA REGISTER ---
         await createUserWithEmailAndPassword(auth, email, password);
         toast.success('Registrasi Berhasil! Silahkan login.');
-        setIsLoginMode(true);
+        setIsLoginMode(true); // Pindah ke mode login
       }
     } catch (error) {
-      toast.error(error.message);
+      console.error("Auth Error:", error.code); // Debugging di console
+
+      // 4. PESAN ERROR YANG LEBIH JELAS
+      if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+        toast.error('Email atau Password salah!');
+      } else if (error.code === 'auth/email-already-in-use') {
+        toast.error('Email sudah terdaftar, silakan Login.');
+      } else if (error.code === 'auth/network-request-failed') {
+         toast.error('Gagal koneksi. Cek internet/DNS Anda.');
+      } else {
+        toast.error('Gagal: ' + error.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -38,10 +60,8 @@ function App() {
   };
 
   return (
-    // 1. WRAPPER UTAMA: Ini yang membuat posisi jadi di tengah (CENTER)
     <div className="login-page-wrapper">
       
-      {/* Komponen Sonner Toaster */}
       <Toaster position="top-center" richColors />
 
       <div className="login-container">
@@ -86,9 +106,8 @@ function App() {
           </button>
         </form>
 
-        {/* 2. TOMBOL REQUEST: Render Toast (Di bawah Login) */}
         <button
-          type="button" // Penting: type button agar tidak men-submit form
+          type="button" 
           className="btn-secondary"
           onClick={() => {
             toast.success('This is a success toast');
@@ -114,4 +133,4 @@ function App() {
   );
 }
 
-export default App;
+export default Login;
