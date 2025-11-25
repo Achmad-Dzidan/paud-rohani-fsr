@@ -3,10 +3,13 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Login from './Login'; // Asumsi App.jsx lama Anda direname jadi Login.jsx
 import Layout from './Layout';
 import Dashboard from './pages/Dashboard';
+import Income from './pages/Income';
+import Users from './pages/Users';
+import DailyIncome from './pages/DailyIncome';
 
 // Buat komponen dummy untuk Income/Users sementara
-const Income = () => <h1>Income Page</h1>;
-const Users = () => <h1>Users Page</h1>;
+// const Income = () => <h1>Income Page</h1>;
+// const Users = () => <h1>Users Page</h1>;
 
 function App() {
   return (
@@ -19,6 +22,7 @@ function App() {
         <Route element={<Layout />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/income" element={<Income />} />
+          <Route path="/daily-income" element={<DailyIncome />} />
           <Route path="/users" element={<Users />} />
         </Route>
       </Routes>

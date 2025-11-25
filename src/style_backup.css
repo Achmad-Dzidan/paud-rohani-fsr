@@ -1,0 +1,565 @@
+/* --- GLOBAL VARIABLES --- */
+:root {
+    --primary-blue: #2563eb;
+    --primary-hover: #1d4ed8;
+    --success-green: #16a34a;
+    --success-hover: #15803d;
+    --danger-red: #ef4444;
+    --danger-hover: #dc2626;
+    --bg-color: #f8fafc;
+    --sidebar-width: 260px;
+    --text-dark: #111827;
+    --text-gray: #6b7280;
+    --border-color: #e2e8f0;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
+
+body { display: flex; height: 100vh; background-color: var(--bg-color); overflow: hidden; }
+
+/* --- SIDEBAR --- */
+.sidebar {
+    width: var(--sidebar-width);
+    background: white;
+    border-right: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    padding: 24px;
+    height: 100%;
+    flex-shrink: 0;
+}
+
+.brand { margin-bottom: 40px; }
+.brand h2 { font-size: 20px; font-weight: 700; color: var(--text-dark); }
+.brand p { font-size: 13px; color: var(--text-gray); }
+
+.menu-list { list-style: none; flex-grow: 1; }
+.menu-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 16px; border-radius: 8px;
+    color: var(--text-gray); text-decoration: none;
+    font-size: 14px; font-weight: 500; margin-bottom: 4px;
+    transition: all 0.2s;
+}
+.menu-item:hover { background-color: #f1f5f9; color: var(--text-dark); }
+.menu-item.active { background-color: #eff6ff; color: var(--primary-blue); font-weight: 600; }
+.menu-item i { width: 20px; text-align: center; }
+
+.logout { color: var(--danger-red); margin-top: auto; }
+.logout:hover { background-color: #fef2f2; color: var(--danger-hover); }
+
+/* --- MAIN CONTENT GLOBAL --- */
+.main-content { flex-grow: 1; padding: 32px 40px; overflow-y: auto; }
+
+.header-section, .page-header { 
+    display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; 
+}
+
+.page-title h1, .page-header h1 { font-size: 24px; font-weight: 700; color: var(--text-dark); }
+.page-title p, .page-header p { font-size: 14px; color: var(--text-gray); margin-top: 4px; }
+
+/* Badge Footer */
+.footer-badge {
+    position: fixed; bottom: 20px; right: 20px;
+    background: white; padding: 6px 10px; border-radius: 6px;
+    font-size: 11px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    display: flex; align-items: center; gap: 6px; z-index: 100;
+}
+
+
+/* =========================================
+   STYLE KHUSUS DASHBOARD (ANALYTICS)
+   ========================================= */
+
+/* Kartu Profit Biru */
+.stat-card {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    color: white;
+    padding: 32px;
+    border-radius: 16px;
+    position: relative;
+    box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3);
+    margin-bottom: 32px;
+    overflow: hidden;
+}
+
+.stat-header { display: flex; justify-content: space-between; align-items: flex-start; }
+.stat-title { font-size: 14px; opacity: 0.9; margin-bottom: 8px; font-weight: 500; }
+.stat-value { font-size: 36px; font-weight: 700; margin-bottom: 8px; }
+.stat-desc { font-size: 13px; opacity: 0.8; display: flex; align-items: center; gap: 6px; }
+.stat-icon {
+    background: rgba(255,255,255,0.2);
+    width: 48px; height: 48px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 12px; font-size: 24px;
+}
+
+/* Area Grafik */
+.chart-section {
+    background: white; padding: 24px;
+    border-radius: 16px; border: 1px solid var(--border-color);
+    margin-bottom: 32px;
+    height: 400px; /* Tinggi fix untuk chart */
+}
+.section-title { font-size: 16px; font-weight: 700; color: var(--text-dark); margin-bottom: 20px; }
+
+/* Grid Bawah (Recent & Missing) */
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* Bagi 2 kolom */
+    gap: 24px;
+}
+
+.list-box {
+    background: white; padding: 24px;
+    border-radius: 16px; border: 1px solid var(--border-color);
+    min-height: 300px;
+}
+
+/* Item List Style */
+.list-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px;
+    border-bottom: 1px solid #f1f5f9;
+}
+.list-item:last-child { border-bottom: none; }
+
+.user-meta { display: flex; align-items: center; gap: 12px; }
+.meta-text h4 { font-size: 14px; font-weight: 600; color: var(--text-dark); }
+.meta-text p { font-size: 11px; color: var(--text-gray); }
+
+.amount-plus { color: var(--success-green); font-weight: 600; font-size: 14px; }
+.status-pending { color: var(--text-gray); font-style: italic; font-size: 13px; }
+
+/* Avatar kecil untuk list */
+.avatar-sm {
+    width: 40px; height: 40px; font-size: 14px;
+    background-color: var(--primary-blue); color: white;
+    border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700;
+}
+
+/* Responsif untuk layar kecil */
+@media (max-width: 768px) {
+    .dashboard-grid { grid-template-columns: 1fr; }
+}
+
+/* =========================================
+   STYLE KHUSUS USERS (USER MANAGEMENT)
+   ========================================= */
+
+.btn-add {
+    background-color: var(--primary-blue);
+    color: white; border: none; padding: 10px 20px;
+    border-radius: 8px; font-size: 14px; font-weight: 600;
+    cursor: pointer; display: flex; align-items: center; gap: 8px;
+    transition: 0.2s;
+}
+.btn-add:hover { background-color: var(--primary-hover); }
+
+/* Grid Card User */
+.user-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 20px;
+}
+
+.user-card {
+    background: white; padding: 20px;
+    border-radius: 12px; border: 1px solid var(--border-color);
+    display: flex; align-items: center; justify-content: space-between;
+    transition: 0.2s;
+}
+.user-card:hover { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
+
+.user-info-wrapper { display: flex; align-items: center; gap: 16px; }
+
+.avatar {
+    width: 48px; height: 48px;
+    background-color: var(--primary-blue); color: white;
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 16px;
+}
+.avatar.blue { background-color: #2563eb; }
+.avatar.purple { background-color: #7c3aed; }
+
+.info h3 { font-size: 15px; font-weight: 600; color: var(--text-dark); }
+.info p { font-size: 12px; color: var(--text-gray); margin-top: 2px; }
+
+.btn-delete {
+    background: none; border: none; color: var(--danger-red);
+    cursor: pointer; padding: 8px; border-radius: 6px; opacity: 0.7; transition: 0.2s;
+}
+.btn-delete:hover { background-color: #fef2f2; opacity: 1; }
+
+/* MODAL POPUP */
+.modal-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: none; justify-content: center; align-items: center;
+    z-index: 1000; backdrop-filter: blur(2px);
+}
+.modal-overlay.active { display: flex; }
+
+.modal-box {
+    background: white; width: 100%; max-width: 480px;
+    border-radius: 12px; padding: 24px; position: relative;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+    animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+.modal-header { display: flex; justify-content: space-between; margin-bottom: 20px; }
+.modal-header h3 { font-size: 18px; font-weight: 700; }
+.close-modal { background: none; border: none; font-size: 20px; color: #9ca3af; cursor: pointer; }
+
+.modal-body label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+.modal-body input {
+    width: 100%; padding: 10px 14px;
+    border: 1px solid var(--border-color); border-radius: 6px;
+    font-size: 14px; margin-bottom: 24px; outline: none;
+}
+.modal-body input:focus { border-color: var(--primary-blue); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+
+.modal-footer { display: flex; justify-content: flex-end; gap: 12px; }
+
+.btn-cancel {
+    background: white; border: 1px solid var(--border-color);
+    padding: 10px 16px; border-radius: 6px; font-weight: 600; font-size: 14px;
+    cursor: pointer; color: var(--text-dark);
+}
+.btn-save {
+    background: var(--primary-blue); border: none; color: white;
+    padding: 10px 16px; border-radius: 6px; font-weight: 600; font-size: 14px; cursor: pointer;
+}
+
+/* =========================================
+   STYLE KHUSUS INCOME MANAGEMENT
+   ========================================= */
+
+/* Update bagian ini agar form berada di tengah */
+.form-card {
+    background: white; 
+    border: 1px solid var(--border-color);
+    border-radius: 12px; 
+    
+    /* Padding diperbesar agar terlihat luas (tinggi) seperti gambar */
+    padding: 40px; 
+    
+    /* Agar lebar mengisi ruang tapi dibatasi (seperti gambar) */
+    width: 100%;
+    max-width: 950px; /* Diperlebar dari 800px ke 950px */
+    
+    /* INI KUNCI AGAR POSISI DI TENGAH (Horizontal Center) */
+    margin: 0 auto; 
+    
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+}
+
+.toggle-container {
+    display: flex; background-color: #f1f5f9; padding: 4px;
+    border-radius: 8px; margin-bottom: 32px; /* Jarak ke bawah diperlebar */
+}
+
+.toggle-btn {
+    flex: 1; padding: 12px; /* Tombol sedikit lebih tebal */
+    border: none; border-radius: 6px;
+    font-weight: 600; font-size: 14px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    transition: 0.3s; background: transparent; color: var(--text-gray);
+}
+
+.toggle-btn.active-income {
+    background-color: var(--success-green); color: white;
+    box-shadow: 0 2px 4px rgba(22, 163, 74, 0.2);
+}
+.toggle-btn.active-expense {
+    background-color: var(--danger-red); color: white;
+    box-shadow: 0 2px 4px rgba(220, 38, 38, 0.2);
+}
+
+.form-group { margin-bottom: 24px; /* Jarak antar input diperlebar */ }
+
+.form-label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 10px; color: var(--text-dark); }
+
+/* Input diperbesar sedikit agar mirip gambar */
+.form-control {
+    width: 100%; padding: 14px; /* Padding input ditambah */
+    border: 1px solid var(--border-color); border-radius: 8px;
+    font-size: 14px; outline: none; background-color: white; transition: 0.2s;
+}
+.form-control:focus {
+    border-color: var(--success-green); box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.1);
+}
+
+textarea.form-control { resize: vertical; min-height: 120px; }
+
+.btn-submit {
+    width: 100%; background-color: var(--success-green);
+    color: white; border: none; padding: 16px; /* Tombol submit lebih besar */
+    border-radius: 8px;
+    font-weight: 600; font-size: 15px; cursor: pointer; transition: 0.2s;
+    margin-top: 10px;
+}
+.btn-submit:hover { background-color: var(--success-hover); }
+
+/* Overlay */
+.confirm-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.55);
+    backdrop-filter: blur(3px);
+    z-index: 900;
+    opacity: 1;
+    transition: 0.25s ease;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* Modal */
+.confirm-modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 420px;
+    background: white;
+    border-radius: 12px;
+    padding: 25px;
+    z-index: 1000;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    animation: popup 0.25s ease;
+}
+
+@keyframes popup {
+    from { transform: translate(-50%, -45%); opacity: 0; }
+    to { transform: translate(-50%, -50%); opacity: 1; }
+}
+
+.confirm-title {
+    font-size: 20px;
+    font-weight: 600;
+}
+
+.confirm-subtitle {
+    color: #555;
+    font-size: 14px;
+    margin-bottom: 15px;
+}
+
+.confirm-box {
+    background: #f8f8f8;
+    border-radius: 10px;
+    padding: 15px 18px;
+    margin-bottom: 20px;
+    line-height: 1.7rem;
+}
+
+.confirm-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.cancel-btn {
+    background: #eee;
+    padding: 8px 18px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+}
+
+.confirm-btn {
+    background: #2a9f5c;
+    padding: 8px 18px;
+    border-radius: 8px;
+    color: white;
+    border: none;
+    cursor: pointer;
+}
+
+.popup-overlay {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0,0,0,0.4);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 999;
+}
+
+.popup-box {
+    background: white;
+    padding: 25px;
+    width: 530px;
+    border-radius: 8px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+}
+
+.popup-details {
+    background: #f4f4f4;
+    padding: 15px;
+    border-radius: 10px;
+    margin-top: 10px;
+}
+
+.popup-details p {
+    margin-bottom: 8px;   /* atau 8px jika ingin lebih renggang */
+}
+
+.popup-details p:last-child {
+    margin-bottom: 0;
+}
+
+
+.popup-actions {
+    margin-top: 20px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.cancel-btn {
+    padding: 8px 16px;
+    background: #ddd;
+    border-radius: 8px;
+}
+
+.confirm-btn {
+    padding: 8px 16px;
+    background: #1fac4d;
+    color: white;
+    border-radius: 8px;
+}
+
+
+/* =========================================
+   FIX ALIGNMENT HEADER INCOME
+   ========================================= */
+
+.centered-header {
+    /* Samakan lebar dan posisi dengan .form-card */
+    max-width: 950px; 
+    margin: 0 auto 24px auto; /* Auto kiri-kanan agar di tengah */
+    
+    /* Reset display flex agar text menumpuk (atas-bawah), bukan kiri-kanan */
+    display: block; 
+}
+
+.centered-header h1 {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text-dark);
+    margin-bottom: 4px;
+}
+
+.centered-header p {
+    font-size: 14px;
+    color: var(--text-gray);
+}
+
+/* =========================================
+   RESPONSIVE MOBILE (SMARTPHONE)
+   ========================================= */
+
+/* Tombol Menu (Hamburger) - Default Sembunyi di Desktop */
+.mobile-toggle-btn {
+    display: none; /* Sembunyi di PC */
+    background: white;
+    border: 1px solid var(--border-color);
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 16px;
+    color: var(--text-dark);
+    cursor: pointer;
+    margin-right: 12px;
+}
+
+/* Overlay Hitam saat Sidebar muncul di HP */
+.sidebar-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 998; /* Di bawah sidebar, di atas konten */
+    display: none; /* Default sembunyi */
+    backdrop-filter: blur(2px);
+}
+.sidebar-overlay.active { display: block; }
+
+/* Tombol Close di Sidebar (X) */
+.sidebar-close-btn {
+    display: none; /* Sembunyi di PC */
+    background: none; border: none;
+    font-size: 20px; color: var(--text-gray);
+    cursor: pointer; position: absolute; right: 20px; top: 24px;
+}
+
+/* --- ATURAN KHUSUS LAYAR KECIL (Max 768px) --- */
+@media (max-width: 768px) {
+    
+    /* 1. Sidebar jadi floting & sembunyi */
+    .sidebar {
+        position: fixed;
+        left: -100%; /* Sembunyi ke kiri */
+        top: 0; bottom: 0;
+        z-index: 999; /* Paling atas */
+        width: 280px;
+        transition: 0.3s ease-in-out;
+        box-shadow: 4px 0 10px rgba(0,0,0,0.1);
+    }
+    
+    .sidebar.open { left: 0; /* Muncul saat class 'open' aktif */ }
+
+    /* 2. Tampilkan tombol Close & Toggle */
+    .sidebar-close-btn { display: block; }
+    .mobile-toggle-btn { display: block; }
+
+    /* 3. Main Content Full Width */
+    .main-content {
+        padding: 20px; /* Padding lebih kecil */
+        width: 100%;
+    }
+
+    /* 4. Header Section */
+    .header-section, .page-header {
+        flex-direction: column; /* Judul dan tombol tumpuk ke bawah */
+        align-items: flex-start;
+        gap: 16px;
+    }
+    
+    /* Header khusus Income Management (yang kita fix tadi) */
+    .centered-header {
+        text-align: left; /* Rata kiri di HP */
+        margin-left: 0; margin-right: 0;
+    }
+
+    /* 5. Grid Layout jadi 1 Kolom */
+    .dashboard-grid, .user-grid {
+        grid-template-columns: 1fr; /* 1 kolom penuh */
+    }
+
+    /* 6. Form Card Income */
+    .form-card {
+        padding: 20px; /* Kurangi padding dalam */
+    }
+    
+    .toggle-container {
+        flex-direction: column; /* Tombol income/expense tumpuk */
+        gap: 8px;
+    }
+
+    /* 7. Font Size Penyesuaian */
+    .stat-value { font-size: 28px; }
+    .page-title h1, .page-header h1 { font-size: 20px; }
+    
+    /* Judul halaman agar sejajar dengan tombol menu */
+    .page-title-wrapper {
+        display: flex; align-items: center; width: 100%;
+    }
+}

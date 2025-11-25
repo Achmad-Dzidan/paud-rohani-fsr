@@ -19,39 +19,52 @@ function Login() { // Ubah nama function jadi Login agar rapi
     e.preventDefault();
     setLoading(true);
 
+    // 1. CEK IMPORT & MODE
+    console.log("=== MULAI PROSES AUTH ===");
+    console.log("Mode:", isLoginMode ? "LOGIN" : "REGISTER");
+    console.log("Tipe Fungsi Login:", typeof signInWithEmailAndPassword); // Harus 'function'
+
+    // 2. CEK NILAI INPUT (Penting!)
+    console.log("Email yang dikirim:", email);
+    console.log("Password yang dikirim:", password);
+
+    // Cek apakah ada yang kosong/spasi
+    if (!email || !password) {
+      toast.error("Email atau Password kosong/tidak terbaca!");
+      setLoading(false);
+      return;
+    }
+
     try {
       if (isLoginMode) {
-        // --- LOGIKA LOGIN ---
-        await signInWithEmailAndPassword(auth, email, password);
+        console.log(">> Mengeksekusi signInWithEmailAndPassword...");
         
+        // --- INI BARIS KRUSIAL ---
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        
+        console.log(">> HASIL LOGIN:", userCredential); // Jika muncul ini, berarti berhasil
         toast.success('Login Berhasil! Mengalihkan...');
         
-        // 3. PINDAH KE DASHBOARD SETELAH 1 DETIK (Agar toast terbaca)
         setTimeout(() => {
             navigate('/dashboard'); 
         }, 1000);
 
       } else {
-        // --- LOGIKA REGISTER ---
+        console.log(">> Mengeksekusi Register...");
         await createUserWithEmailAndPassword(auth, email, password);
         toast.success('Registrasi Berhasil! Silahkan login.');
-        setIsLoginMode(true); // Pindah ke mode login
+        setIsLoginMode(true);
       }
     } catch (error) {
-      console.error("Auth Error:", error.code); // Debugging di console
-
-      // 4. PESAN ERROR YANG LEBIH JELAS
-      if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
-        toast.error('Email atau Password salah!');
-      } else if (error.code === 'auth/email-already-in-use') {
-        toast.error('Email sudah terdaftar, silakan Login.');
-      } else if (error.code === 'auth/network-request-failed') {
-         toast.error('Gagal koneksi. Cek internet/DNS Anda.');
-      } else {
-        toast.error('Gagal: ' + error.message);
-      }
+      // 3. TANGKAP ERROR KLIEN (Sebelum ke Network)
+      console.error("!!! TERJADI ERROR !!!");
+      console.error("Code:", error.code);
+      console.error("Message:", error.message);
+      
+      toast.error(`Gagal: ${error.code}`);
     } finally {
       setLoading(false);
+      console.log("=== SELESAI ===");
     }
   };
 

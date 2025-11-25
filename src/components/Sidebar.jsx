@@ -47,6 +47,14 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
           </li>
           <li>
             <NavLink 
+              to="/daily-income" 
+              className={({ isActive }) => `menu-item ${isActive ? 'active' : ''}`}
+            >
+              <i className="fa-solid fa-calendar-days"></i> Daily Income
+            </NavLink>
+          </li>
+          <li>
+            <NavLink 
               to="/users" 
               className={({ isActive }) => `menu-item ${isActive ? 'active' : ''}`}
             >
