@@ -90,6 +90,15 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
               <i className="fa-solid fa-user-group"></i> User Management
             </NavLink>
           </li>
+          <li>
+            <NavLink 
+              to="/other-transaction" 
+              className={({ isActive }) => `menu-item ${isActive ? 'active' : ''}`}
+              onClick={handleLinkClick} 
+            >
+              <i className="fa-solid fa-cash-register"></i> Other Transaction
+            </NavLink>
+          </li>
         </ul>
         
         {/* Tombol Logout */}
