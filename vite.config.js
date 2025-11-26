@@ -1,18 +1,16 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
+// vite.config.js
 export default defineConfig(({ command }) => {
   const config = {
     plugins: [react()],
     base: '/',
-    // TAMBAHKAN INI:
-    server: {
-      port: 3000, // Ganti port jadi 3000
-    }
   }
 
   if (command !== 'serve') {
-    config.base = '/paud-rohani-fsr/'
+    // PERHATIKAN SLASH DI DEPAN DAN BELAKANG
+    config.base = '/paud-finance-app/' 
   }
 
   return config
