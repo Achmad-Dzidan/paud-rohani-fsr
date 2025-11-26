@@ -5,8 +5,15 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
   const navigate = useNavigate();
 
   const handleLogout = () => {
-    // Logika logout bisa ditaruh di sini (misal clear session)
-    navigate('/'); // Kembali ke Login
+    navigate('/'); 
+  };
+
+  // --- FUNGSI BARU: Tutup sidebar saat link diklik ---
+  const handleLinkClick = () => {
+    // Hanya jalankan toggle jika sidebar sedang terbuka (artinya sedang di mobile)
+    if (isOpen) {
+      toggleSidebar();
+    }
   };
 
   return (
@@ -33,6 +40,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
             <NavLink 
               to="/dashboard" 
               className={({ isActive }) => `menu-item ${isActive ? 'active' : ''}`}
+              onClick={handleLinkClick} // <--- Tambahkan di sini
             >
               <i className="fa-solid fa-border-all"></i> Dashboard
             </NavLink>
@@ -41,6 +49,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
             <NavLink 
               to="/income" 
               className={({ isActive }) => `menu-item ${isActive ? 'active' : ''}`}
+              onClick={handleLinkClick} // <--- Tambahkan di sini
             >
               <i className="fa-solid fa-dollar-sign"></i> Income Management
             </NavLink>
@@ -49,14 +58,25 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
             <NavLink 
               to="/daily-income" 
               className={({ isActive }) => `menu-item ${isActive ? 'active' : ''}`}
+              onClick={handleLinkClick} // <--- Tambahkan di sini
             >
               <i className="fa-solid fa-calendar-days"></i> Daily Income
             </NavLink>
           </li>
           <li>
             <NavLink 
+              to="/savings" 
+              className={({ isActive }) => `menu-item ${isActive ? 'active' : ''}`}
+              onClick={handleLinkClick} // <--- Tambahkan di sini
+            >
+              <i className="fa-solid fa-piggy-bank"></i> Student Savings
+            </NavLink>
+          </li>
+          <li>
+            <NavLink 
               to="/absensi" 
               className={({ isActive }) => `menu-item ${isActive ? 'active' : ''}`}
+              onClick={handleLinkClick} // <--- Tambahkan di sini
             >
               <i className="fa-solid fa-user-group"></i> Absensi
             </NavLink>
@@ -65,6 +85,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
             <NavLink 
               to="/users" 
               className={({ isActive }) => `menu-item ${isActive ? 'active' : ''}`}
+              onClick={handleLinkClick} // <--- Tambahkan di sini
             >
               <i className="fa-solid fa-user-group"></i> User Management
             </NavLink>

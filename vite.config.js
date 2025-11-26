@@ -10,7 +10,7 @@ export default defineConfig(({ command }) => {
 
   if (command !== 'serve') {
     // PERHATIKAN SLASH DI DEPAN DAN BELAKANG
-    config.base = '/paud-finance-app/' 
+    config.base = '/paud-rohani-fsr/' 
   }
 
   return config

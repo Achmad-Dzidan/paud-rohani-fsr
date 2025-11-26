@@ -30,14 +30,24 @@ const Dashboard = () => {
     return `${year}-${month}-${day}`;
   };
 
-  // FETCH DATA
+  // Cache data user untuk lookup foto
+  const [userMap, setUserMap] = useState({}); 
+
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // 1. Ambil Users
+        // 1. Ambil Users & Buat Map (ID -> Data User)
         const usersSnap = await getDocs(collection(db, "users"));
         let allUsers = [];
-        usersSnap.forEach(doc => allUsers.push({ id: doc.id, name: doc.data().name }));
+        let uMap = {};
+        
+        usersSnap.forEach(doc => {
+            const d = doc.data();
+            const userData = { id: doc.id, name: d.name, nickname: d.nickname, photo: d.photo };
+            allUsers.push(userData);
+            uMap[doc.id] = userData; // Simpan ke map
+        });
+        setUserMap(uMap); // Simpan ke State
 
         // 2. Ambil Transaksi
         const transRef = collection(db, "transactions");
@@ -187,7 +197,16 @@ const Dashboard = () => {
                   recentIncome.map((t, index) => (
                       <div className="list-item" key={index}>
                           <div className="user-meta">
-                              <div className="avatar-sm">{t.userName ? t.userName.substring(0, 2).toUpperCase() : "US"}</div>
+                              <div className="avatar-sm" style={{ 
+                                    backgroundColor: userMap[t.userId]?.photo ? 'transparent' : 'var(--primary-blue)',
+                                    backgroundImage: userMap[t.userId]?.photo ? `url(${userMap[t.userId]?.photo})` : 'none',
+                                    backgroundSize: 'cover',
+                                    backgroundPosition: 'center',
+                                    color: userMap[t.userId]?.photo ? 'transparent' : 'white',
+                                    border: '1px solid #e2e8f0'
+                                }}>
+                                    {!userMap[t.userId]?.photo && (t.userName ? t.userName.substring(0, 2).toUpperCase() : "US")}
+                                </div>
                               <div className="meta-text">
                                   <h4>{t.userName}</h4>
                                   <p>{t.date}</p>
@@ -208,7 +227,16 @@ const Dashboard = () => {
                   missingUsers.map((u) => (
                       <div className="list-item" key={u.id}>
                           <div className="user-meta">
-                              <div className="avatar-sm" style={{backgroundColor:'#9ca3af'}}>{u.name.substring(0, 2).toUpperCase()}</div>
+                              <div className="avatar-sm" style={{
+                                    backgroundColor: u.photo ? 'transparent' : '#9ca3af', // Abu-abu default
+                                    backgroundImage: u.photo ? `url(${u.photo})` : 'none',
+                                    backgroundSize: 'cover',
+                                    backgroundPosition: 'center',
+                                    color: u.photo ? 'transparent' : 'white',
+                                    border: '1px solid #e2e8f0'
+                                }}>
+                                    {!u.photo && u.name.substring(0, 2).toUpperCase()}
+                                </div>
                               <div className="meta-text">
                                   <h4>{u.name}</h4>
                                   <p>No record today</p>

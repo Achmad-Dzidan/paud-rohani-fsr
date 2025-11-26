@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { collection, query, orderBy, onSnapshot, where, doc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../firebase';
+import { collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, serverTimestamp, getDocs } from 'firebase/firestore';
+import { db } from '../firebase'; // Pastikan path ini sesuai
 import { toast } from 'sonner';
 
 const DailyIncome = () => {
@@ -14,28 +14,49 @@ const DailyIncome = () => {
   
   // --- STATE UI & FILTER ---
   const [selectedDate, setSelectedDate] = useState('');
-  const [activeCardId, setActiveCardId] = useState(null); // ID kartu yang sedang di-tap (menampilkan menu)
+  const [activeCardId, setActiveCardId] = useState(null); 
   
-  // --- STATE MODAL (EDIT/DELETE) ---
+  // --- STATE MODAL ---
   const [showModal, setShowModal] = useState(false);
-  const [modalMode, setModalMode] = useState('edit'); // 'edit' atau 'delete'
+  const [modalMode, setModalMode] = useState('edit');
   const [isProcessing, setIsProcessing] = useState(false);
   
-  // Data sementara untuk diedit/dihapus
+  // Data edit
   const [editData, setEditData] = useState({
     id: '',
     userId: '',
     userName: '',
     amount: '',
     date: '',
-    note: ''
+    note: '',
+    type: 'income'
   });
 
-  // 1. FETCH DATA
+  // State Cache User untuk Foto
+  const [userMap, setUserMap] = useState({}); 
+
+  // 1. FETCH USERS (Untuk Foto & Nickname)
+  useEffect(() => {
+    const fetchUsers = async () => {
+        try {
+            const usersSnap = await getDocs(collection(db, "users"));
+            let uMap = {};
+            usersSnap.forEach(doc => {
+                // Simpan data user lengkap (termasuk photo)
+                uMap[doc.id] = doc.data(); 
+            });
+            setUserMap(uMap);
+        } catch (e) {
+            console.error("Error fetching users:", e);
+        }
+    };
+    fetchUsers();
+  }, []);
+
+  // 2. FETCH DATA TRANSAKSI
   useEffect(() => {
     const q = query(
       collection(db, "transactions"), 
-      where("type", "==", "income"), 
       orderBy("date", "desc"),
       orderBy("createdAt", "desc")
     );
@@ -49,14 +70,14 @@ const DailyIncome = () => {
       setLoading(false);
     }, (error) => {
       console.error(error);
-      toast.error("Gagal memuat data income.");
+      toast.error("Gagal memuat data.");
       setLoading(false);
     });
 
     return () => unsubscribe();
   }, []);
 
-  // 2. GROUPING LOGIC
+  // 3. GROUPING LOGIC
   useEffect(() => {
     if (transactions.length === 0) {
       setGroupedData({});
@@ -76,24 +97,18 @@ const DailyIncome = () => {
   }, [transactions, selectedDate]);
 
 
-  // --- HANDLERS INTERAKSI KARTU ---
+  // --- HANDLERS ---
 
-  // Saat kartu di-tap
   const handleCardClick = (id) => {
-    if (activeCardId === id) {
-      // Jika sudah aktif, jangan lakukan apa-apa (biarkan user memilih ikon)
-      return; 
-    }
+    if (activeCardId === id) return; 
     setActiveCardId(id);
   };
 
-  // Tombol Kembali (Batalkan mode edit di kartu)
   const handleCancelAction = (e) => {
-    e.stopPropagation(); // Mencegah event bubbling ke card click
+    e.stopPropagation();
     setActiveCardId(null);
   };
 
-  // Tombol Buka Modal Edit
   const handleOpenEdit = (e, transaction) => {
     e.stopPropagation();
     setModalMode('edit');
@@ -101,33 +116,32 @@ const DailyIncome = () => {
       id: transaction.id,
       userId: transaction.userId,
       userName: transaction.userName,
-      amount: transaction.amount,
+      amount: transaction.amount / 1000, 
       date: transaction.date,
-      note: transaction.note || ''
+      note: transaction.note || '',
+      type: transaction.type
     });
-    setShowModal(true);
-    setActiveCardId(null); // Tutup menu kartu
-  };
-
-  // Tombol Buka Modal Delete
-  const handleOpenDelete = (e, transaction) => {
-    e.stopPropagation();
-    setModalMode('delete');
-    setEditData(transaction); // Kita butuh ID dan Nama untuk konfirmasi
     setShowModal(true);
     setActiveCardId(null);
   };
 
-  // --- HANDLERS FIREBASE CRUD ---
+  const handleOpenDelete = (e, transaction) => {
+    e.stopPropagation();
+    setModalMode('delete');
+    setEditData(transaction);
+    setShowModal(true);
+    setActiveCardId(null);
+  };
 
-  // Simpan Perubahan (Edit)
+  // --- CRUD ---
+
   const handleSaveEdit = async (e) => {
     e.preventDefault();
     setIsProcessing(true);
     try {
       const docRef = doc(db, "transactions", editData.id);
       await updateDoc(docRef, {
-        amount: parseInt(editData.amount),
+        amount: parseInt(editData.amount) * 1000,
         date: editData.date,
         note: editData.note,
         updatedAt: serverTimestamp()
@@ -141,7 +155,6 @@ const DailyIncome = () => {
     }
   };
 
-  // Hapus Data
   const handleConfirmDelete = async () => {
     setIsProcessing(true);
     try {
@@ -155,18 +168,18 @@ const DailyIncome = () => {
     }
   };
 
-
   // --- HELPERS ---
   const formatRupiah = (num) => "Rp " + new Intl.NumberFormat('id-ID').format(num);
 
-  // Format Tanggal Header: dd/mm/yyyy
+  const getInitials = (name) => name ? name.substring(0, 2).toUpperCase() : "?";
+
   const formatDateHeader = (dateString) => {
     if (!dateString) return "";
     const date = new Date(dateString);
     const d = String(date.getDate()).padStart(2, '0');
     const m = String(date.getMonth() + 1).padStart(2, '0');
     const y = date.getFullYear();
-    return `${d}/${m}/${y}`; // Sesuai request
+    return `${d}/${m}/${y}`;
   };
 
   return (
@@ -179,12 +192,11 @@ const DailyIncome = () => {
             <i className="fa-solid fa-bars"></i>
           </button>
           <div className="page-title">
-            <h1>Daily Income</h1>
-            <p>Klik user untuk Edit/Hapus</p>
+            <h1>Daily Flow</h1>
+            <p>Monitor Pemasukan & Pengeluaran</p>
           </div>
         </div>
 
-        {/* INPUT TANGGAL */}
         <div className="date-filter-wrapper">
             <input 
                 type="date" 
@@ -214,11 +226,9 @@ const DailyIncome = () => {
                 <p>No records found.</p>
             </div>
         ) : (
-            // LOOP TANGGAL
             Object.keys(groupedData).map((dateKey) => (
                 <div key={dateKey} style={{ marginBottom: '40px' }}>
                     
-                    {/* Header Tanggal dd/mm/yyyy */}
                     <div style={{ marginBottom: '16px' }}>
                         <h3 style={{ fontSize: '16px', fontWeight: '700', color: 'var(--text-dark)' }}>
                             {formatDateHeader(dateKey)}
@@ -226,74 +236,70 @@ const DailyIncome = () => {
                         <div style={{ height: '1px', background: 'var(--border-color)', marginTop: '8px', width: '100%' }}></div>
                     </div>
 
-                    {/* LOOP USER CARDS */}
                     <div className="user-grid">
-                        {groupedData[dateKey].map((t) => (
-                            <div 
-                                className="user-card" 
-                                key={t.id} 
-                                style={{ 
-                                    minHeight: 'auto', 
-                                    cursor: 'pointer',
-                                    position: 'relative',
-                                    overflow: 'hidden',
-                                    transition: 'all 0.3s'
-                                }}
-                                onClick={() => handleCardClick(t.id)}
-                            >
-                                {/* KONDISI: JIKA KARTU INI AKTIF (DI-TAP) */}
-                                {activeCardId === t.id ? (
-                                    <div style={{ 
-                                        display: 'flex', 
-                                        justifyContent: 'space-around', 
-                                        alignItems: 'center', 
-                                        width: '100%', 
-                                        height: '100%',
-                                        animation: 'fadeIn 0.2s' 
-                                    }}>
-                                        {/* Tombol EDIT */}
-                                        <button 
-                                            onClick={(e) => handleOpenEdit(e, t)}
-                                            style={{ background: '#3b82f6', color: 'white', border: 'none', padding: '10px', borderRadius: '50%', width: '40px', height: '40px', cursor:'pointer' }}
-                                        >
-                                            <i className="fa-solid fa-pen-to-square"></i>
-                                        </button>
-
-                                        {/* Tombol HAPUS */}
-                                        <button 
-                                            onClick={(e) => handleOpenDelete(e, t)}
-                                            style={{ background: '#ef4444', color: 'white', border: 'none', padding: '10px', borderRadius: '50%', width: '40px', height: '40px', cursor:'pointer' }}
-                                        >
-                                            <i className="fa-solid fa-trash-can"></i>
-                                        </button>
-
-                                        {/* Tombol KEMBALI */}
-                                        <button 
-                                            onClick={handleCancelAction}
-                                            style={{ background: '#9ca3af', color: 'white', border: 'none', padding: '10px', borderRadius: '50%', width: '40px', height: '40px', cursor:'pointer' }}
-                                        >
-                                            <i className="fa-solid fa-rotate-left"></i>
-                                        </button>
-                                    </div>
-                                ) : (
-                                    /* TAMPILAN NORMAL */
-                                    <>
-                                        <div className="user-info-wrapper">
-                                            <div className="avatar blue">
-                                                {t.userName ? t.userName.substring(0, 2).toUpperCase() : "?"}
-                                            </div>
-                                            <div className="info">
-                                                <h3>{t.userName}</h3>
-                                                {t.note && <p style={{fontSize:'11px', fontStyle:'italic'}}>"{t.note}"</p>}
-                                            </div>
+                        {groupedData[dateKey].map((t) => {
+                            const isExpense = t.type === 'expense';
+                            // Ambil data user dari state userMap
+                            const userPhoto = userMap[t.userId]?.photo;
+                            const userNickname = userMap[t.userId]?.nickname || t.userName;
+                            
+                            return (
+                                <div 
+                                    className="user-card" 
+                                    key={t.id} 
+                                    style={{ 
+                                        minHeight: 'auto', 
+                                        cursor: 'pointer',
+                                        position: 'relative',
+                                        overflow: 'hidden',
+                                        transition: 'all 0.3s',
+                                        borderLeft: `4px solid ${isExpense ? 'var(--danger-red)' : 'var(--success-green)'}`
+                                    }}
+                                    onClick={() => handleCardClick(t.id)}
+                                >
+                                    {activeCardId === t.id ? (
+                                        <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center', width: '100%', height: '100%', animation: 'fadeIn 0.2s' }}>
+                                            <button onClick={(e) => handleOpenEdit(e, t)} style={{ background: '#3b82f6', color: 'white', border: 'none', padding: '10px', borderRadius: '50%', width: '40px', height: '40px', cursor:'pointer' }}>
+                                                <i className="fa-solid fa-pen-to-square"></i>
+                                            </button>
+                                            <button onClick={(e) => handleOpenDelete(e, t)} style={{ background: '#ef4444', color: 'white', border: 'none', padding: '10px', borderRadius: '50%', width: '40px', height: '40px', cursor:'pointer' }}>
+                                                <i className="fa-solid fa-trash-can"></i>
+                                            </button>
+                                            <button onClick={handleCancelAction} style={{ background: '#9ca3af', color: 'white', border: 'none', padding: '10px', borderRadius: '50%', width: '40px', height: '40px', cursor:'pointer' }}>
+                                                <i className="fa-solid fa-rotate-left"></i>
+                                            </button>
                                         </div>
-                                        <div style={{ fontWeight: '700', color: 'var(--success-green)', fontSize: '15px' }}>
-                                            +{formatRupiah(t.amount)}
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-                        ))}
+                                    ) : (
+                                        <>
+                                            <div className="user-info-wrapper">
+                                                {/* LOGIKA TAMPILAN AVATAR UPDATE */}
+                                                <div className="avatar" style={{ 
+                                                    backgroundColor: userPhoto ? 'transparent' : (isExpense ? '#ef4444' : '#2563eb'),
+                                                    backgroundImage: userPhoto ? `url(${userPhoto})` : 'none',
+                                                    backgroundSize: 'cover',
+                                                    backgroundPosition: 'center',
+                                                    border: '1px solid #e2e8f0',
+                                                    color: userPhoto ? 'transparent' : 'white'
+                                                }}>
+                                                    {!userPhoto && getInitials(userNickname)}
+                                                </div>
+                                                
+                                                <div className="info">
+                                                    <h3>{userNickname}</h3>
+                                                    <div style={{fontSize:'11px', color: isExpense ? 'var(--danger-red)' : 'var(--success-green)', fontWeight:'600', textTransform:'uppercase'}}>
+                                                        {isExpense ? 'Expense' : 'Income'}
+                                                    </div>
+                                                    {t.note && <p style={{fontSize:'11px', fontStyle:'italic', color:'#64748b'}}>"{t.note}"</p>}
+                                                </div>
+                                            </div>
+                                            <div style={{ fontWeight: '700', color: isExpense ? 'var(--danger-red)' : 'var(--success-green)', fontSize: '15px' }}>
+                                                {isExpense ? '-' : '+'}{formatRupiah(t.amount)}
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
 
                 </div>
@@ -301,25 +307,34 @@ const DailyIncome = () => {
         )}
       </div>
 
-      {/* --- MODAL EDIT & DELETE --- */}
+      {/* --- MODAL --- */}
       {showModal && (
         <div className="modal-overlay active" style={{ display: 'flex' }}>
           <div className="modal-box">
-            
-            {/* HEADER MODAL */}
             <div className="modal-header">
-              <h3>{modalMode === 'edit' ? 'Edit Income' : 'Delete Income'}</h3>
+              <h3>{modalMode === 'edit' ? 'Edit Transaction' : 'Delete Transaction'}</h3>
               <button className="close-modal" onClick={() => setShowModal(false)}>&times;</button>
             </div>
 
-            {/* BODY MODAL */}
             {modalMode === 'edit' ? (
-              // --- FORM EDIT ---
               <form onSubmit={handleSaveEdit}>
                 <div className="modal-body">
                    <p style={{marginBottom:'15px', fontWeight:'600'}}>User: {editData.userName}</p>
+                   
+                   <div style={{
+                       display:'inline-block', 
+                       padding:'4px 8px', 
+                       borderRadius:'4px', 
+                       fontSize:'12px', 
+                       fontWeight:'bold', 
+                       marginBottom:'15px',
+                       backgroundColor: editData.type === 'expense' ? '#fee2e2' : '#dcfce7',
+                       color: editData.type === 'expense' ? '#991b1b' : '#166534'
+                   }}>
+                       {editData.type === 'expense' ? 'Substract Income (Expense)' : 'Add Income'}
+                   </div>
 
-                   <label style={{display:'block', marginBottom:'5px', fontSize:'13px'}}>Amount (Rp)</label>
+                   <label style={{display:'block', marginBottom:'5px', fontSize:'13px'}}>Amount (Dalam Ribuan)</label>
                    <input 
                       type="number" 
                       className="form-control" 
@@ -354,10 +369,9 @@ const DailyIncome = () => {
                 </div>
               </form>
             ) : (
-              // --- KONFIRMASI DELETE ---
               <div>
                 <div className="modal-body">
-                   <p>Apakah Anda yakin ingin menghapus data income dari <b>{editData.userName}</b> sebesar <b>{formatRupiah(editData.amount)}</b>?</p>
+                   <p>Yakin ingin menghapus data <b>{editData.type === 'expense' ? 'pengeluaran' : 'pemasukan'}</b> dari <b>{editData.userName}</b> sebesar <b>{formatRupiah(editData.amount)}</b>?</p>
                    <p style={{fontSize:'12px', color:'red', marginTop:'10px'}}>Tindakan ini tidak dapat dibatalkan.</p>
                 </div>
                 <div className="modal-footer">
@@ -373,7 +387,6 @@ const DailyIncome = () => {
                 </div>
               </div>
             )}
-
           </div>
         </div>
       )}

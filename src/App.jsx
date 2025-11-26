@@ -7,6 +7,7 @@ import Income from './pages/Income';
 import Users from './pages/Users';
 import Absensi from './pages/Absensi';
 import DailyIncome from './pages/DailyIncome';
+import StudentSavings from './pages/StudentSavings';
 
 // Buat komponen dummy untuk Income/Users sementara
 // const Income = () => <h1>Income Page</h1>;
@@ -24,6 +25,7 @@ function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/income" element={<Income />} />
           <Route path="/daily-income" element={<DailyIncome />} />
+          <Route path="/savings" element={<StudentSavings />} />
           <Route path="/users" element={<Users />} />
           <Route path="/absensi" element={<Absensi />} />
         </Route>
