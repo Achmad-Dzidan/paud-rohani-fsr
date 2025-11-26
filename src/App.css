@@ -632,3 +632,13 @@ textarea.form-control { resize: vertical; min-height: 120px; }
   border-color: var(--primary-blue);
 }
 
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Menghilangkan spinner di Firefox */
+input[type="number"] {
+  -moz-appearance: textfield;
+}

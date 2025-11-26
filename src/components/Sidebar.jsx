@@ -55,6 +55,14 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
           </li>
           <li>
             <NavLink 
+              to="/absensi" 
+              className={({ isActive }) => `menu-item ${isActive ? 'active' : ''}`}
+            >
+              <i className="fa-solid fa-user-group"></i> Absensi
+            </NavLink>
+          </li>
+          <li>
+            <NavLink 
               to="/users" 
               className={({ isActive }) => `menu-item ${isActive ? 'active' : ''}`}
             >

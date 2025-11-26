@@ -72,7 +72,7 @@ const Income = () => {
       await addDoc(collection(db, "transactions"), {
         userId: formData.userId,
         userName: userName,
-        amount: parseInt(formData.amount),
+        amount: parseInt(formData.amount) * 1000,        
         date: formData.date,
         note: formData.note,
         type: type, // 'income' atau 'expense'
@@ -158,17 +158,30 @@ const Income = () => {
           </div>
 
           <div className="form-group">
-            <label className="form-label">Amount (Rp) *</label>
-            <input 
-              type="number" 
-              name="amount"
-              className="form-control" 
-              placeholder="Enter amount" 
-              required 
-              min="1"
-              value={formData.amount}
-              onChange={handleInputChange}
-            />
+            <label className="form-label">
+                Amount (Dalam Ribuan) * <br/>
+                <span style={{fontSize:'11px', color:'#64748b', fontWeight:'normal'}}>
+                    Contoh: Ketik <b>20</b> untuk Rp 20.000
+                </span>
+            </label>
+            <div style={{position:'relative'}}>
+                <input 
+                  type="number" 
+                  name="amount"
+                  className="form-control" 
+                  placeholder="0" 
+                  required 
+                  min="1"
+                  value={formData.amount}
+                  onChange={handleInputChange}
+                />
+                {/* Helper Visual agar user tahu hasilnya */}
+                {formData.amount && (
+                    <div style={{position:'absolute', right:'10px', top:'12px', fontSize:'12px', color:'green', fontWeight:'bold'}}>
+                        = Rp {(parseInt(formData.amount) * 1000).toLocaleString('id-ID')}
+                    </div>
+                )}
+            </div>
           </div>
 
           <div className="form-group">

@@ -5,6 +5,7 @@ import Layout from './Layout';
 import Dashboard from './pages/Dashboard';
 import Income from './pages/Income';
 import Users from './pages/Users';
+import Absensi from './pages/Absensi';
 import DailyIncome from './pages/DailyIncome';
 
 // Buat komponen dummy untuk Income/Users sementara
@@ -24,6 +25,7 @@ function App() {
           <Route path="/income" element={<Income />} />
           <Route path="/daily-income" element={<DailyIncome />} />
           <Route path="/users" element={<Users />} />
+          <Route path="/absensi" element={<Absensi />} />
         </Route>
       </Routes>
     </Router>
