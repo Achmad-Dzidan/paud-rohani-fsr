@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route } from 'react-router-dom';
 import Login from './Login'; // Asumsi App.jsx lama Anda direname jadi Login.jsx
 import Layout from './Layout';
 import Dashboard from './pages/Dashboard';
@@ -16,7 +16,7 @@ import OtherTransaction from './pages/OtherTransaction'; // Import
 
 function App() {
   return (
-    <Router basename={import.meta.env.BASE_URL}>
+    <Router>
       <Routes>
         {/* Halaman Login (Tanpa Sidebar) */}
         <Route path="/" element={<Login />} />
