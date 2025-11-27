@@ -78,7 +78,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
               className={({ isActive }) => `menu-item ${isActive ? 'active' : ''}`}
               onClick={handleLinkClick} // <--- Tambahkan di sini
             >
-              <i className="fa-solid fa-user-group"></i> Absensi
+              <i class="fa-solid fa-user-check"></i> Absensi
             </NavLink>
           </li>
           <li>
@@ -87,7 +87,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
               className={({ isActive }) => `menu-item ${isActive ? 'active' : ''}`}
               onClick={handleLinkClick} // <--- Tambahkan di sini
             >
-              <i className="fa-solid fa-user-group"></i> User Management
+              <i class="fa-solid fa-users"></i> User Management
             </NavLink>
           </li>
           <li>
