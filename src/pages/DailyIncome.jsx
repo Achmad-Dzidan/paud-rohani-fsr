@@ -126,8 +126,15 @@ const DailyIncome = () => {
   };
 
   // --- HELPERS ---
-  const formatRupiah = (num) => "Rp " + new Intl.NumberFormat('id-ID').format(num);
+  const formatRupiah = (num) => {
+      // Intl.NumberFormat otomatis menangani minus (-Rp 20.000)
+      return new Intl.NumberFormat('id-ID', { 
+          style: 'currency', currency: 'IDR', minimumFractionDigits: 0 
+      }).format(num);
+  };
+
   const getInitials = (name) => name ? name.substring(0, 2).toUpperCase() : "?";
+  
   const formatDateHeader = (dateString) => {
     if (!dateString) return "";
     const d = new Date(dateString);
@@ -174,17 +181,21 @@ const DailyIncome = () => {
         ) : (
             Object.keys(groupedData).map((dateKey) => {
                 
-                // --- LOGIKA PERHITUNGAN BARU ---
+                // --- LOGIKA PERHITUNGAN BARU (NET TOTAL) ---
                 
-                // 1. SAVINGS: Income (Hanya Student)
+                // 1. SAVINGS: Total Income - Total Expense (Hanya Student)
                 const dailySavings = groupedData[dateKey]
-                    .filter(t => t.type === 'income' && !t.isCheckpoint && t.userId !== 'other')
-                    .reduce((sum, t) => sum + t.amount, 0);
+                    .filter(t => !t.isCheckpoint && t.userId !== 'other')
+                    .reduce((sum, t) => {
+                        return t.type === 'income' ? sum + t.amount : sum - t.amount;
+                    }, 0);
 
-                // 2. OTHER: Income (Hanya Other Transaction)
+                // 2. OTHER: Total Income - Total Expense (Hanya Other)
                 const dailyOther = groupedData[dateKey]
-                    .filter(t => t.type === 'income' && t.userId === 'other')
-                    .reduce((sum, t) => sum + t.amount, 0);
+                    .filter(t => t.userId === 'other')
+                    .reduce((sum, t) => {
+                        return t.type === 'income' ? sum + t.amount : sum - t.amount;
+                    }, 0);
 
                 // 3. FEE: Absensi
                 const hadirCount = attendanceMap[dateKey] || 0;
@@ -202,7 +213,7 @@ const DailyIncome = () => {
 
                                 <div style={{display:'flex', gap:'10px', fontSize:'12px', flexWrap:'wrap'}}>
                                     
-                                    {/* SAVINGS (Biru Muda) */}
+                                    {/* SAVINGS (Net) */}
                                     <div style={{
                                         display:'flex', alignItems:'center', gap:'6px', 
                                         background:'#eff6ff', padding:'4px 10px', borderRadius:'20px',
@@ -222,7 +233,7 @@ const DailyIncome = () => {
                                         <span style={{fontWeight:'600'}}>Fee: {formatRupiah(feeTotal)}</span>
                                     </div>
 
-                                    {/* OTHER (Oranye/Kuning) */}
+                                    {/* OTHER (Net) */}
                                     <div style={{
                                         display:'flex', alignItems:'center', gap:'6px', 
                                         background:'#fffbeb', padding:'4px 10px', borderRadius:'20px',
@@ -239,40 +250,140 @@ const DailyIncome = () => {
 
                         {/* GRID USER */}
                         <div className="user-grid">
-                            {groupedData[dateKey].map((t) => {
-                                const isExpense = t.type === 'expense';
-                                const isOther = t.userId === 'other';
-                                const userPhoto = !isOther ? userMap[t.userId]?.photo : null;
-                                const displayName = isOther ? (t.note || "Other") : (userMap[t.userId]?.nickname || t.userName);
-                                
-                                return (
-                                    <div className="user-card" key={t.id} style={{ minHeight: 'auto', cursor: 'pointer', position: 'relative', overflow: 'hidden', transition: 'all 0.3s', borderLeft: `4px solid ${isExpense ? 'var(--danger-red)' : 'var(--success-green)'}`, opacity: t.isCheckpoint ? 0.7 : 1 }} onClick={() => handleCardClick(t.id)}>
-                                        {t.isCheckpoint && <div style={{position:'absolute', top:5, right:5, fontSize:'10px', background:'#e2e8f0', padding:'2px 6px', borderRadius:'4px', color:'#64748b'}}><i className="fa-solid fa-flag-checkered"></i> Checkpoint</div>}
-                                        {activeCardId === t.id ? (
-                                            <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center', width: '100%', height: '100%', animation: 'fadeIn 0.2s' }}>
-                                                <button onClick={(e) => handleOpenEdit(e, t)} style={{ background: '#3b82f6', color: 'white', border: 'none', padding: '10px', borderRadius: '50%', width: '40px', height: '40px', cursor:'pointer' }}><i className="fa-solid fa-pen-to-square"></i></button>
-                                                <button onClick={(e) => handleOpenDelete(e, t)} style={{ background: '#ef4444', color: 'white', border: 'none', padding: '10px', borderRadius: '50%', width: '40px', height: '40px', cursor:'pointer' }}><i className="fa-solid fa-trash-can"></i></button>
-                                                <button onClick={handleCancelAction} style={{ background: '#9ca3af', color: 'white', border: 'none', padding: '10px', borderRadius: '50%', width: '40px', height: '40px', cursor:'pointer' }}><i className="fa-solid fa-rotate-left"></i></button>
-                                            </div>
-                                        ) : (
-                                            <>
-                                                <div className="user-info-wrapper">
-                                                    <div className="avatar" style={{ backgroundColor: userPhoto ? 'transparent' : (isOther ? '#f59e0b' : (isExpense ? '#ef4444' : '#2563eb')), backgroundImage: userPhoto ? `url(${userPhoto})` : 'none', backgroundSize: 'cover', backgroundPosition: 'center', border: '1px solid #e2e8f0', color: userPhoto ? 'transparent' : 'white' }}>
-                                                        {!userPhoto && (isOther ? <i className="fa-solid fa-school"></i> : getInitials(displayName))}
-                                                    </div>
-                                                    <div className="info">
-                                                        <h3>{displayName}</h3>
-                                                        <div style={{fontSize:'11px', color: isExpense ? 'var(--danger-red)' : 'var(--success-green)', fontWeight:'600', textTransform:'uppercase'}}>{isOther ? 'Operational' : (isExpense ? 'Expense' : 'Income')}</div>
-                                                        {!isOther && t.note && <p style={{fontSize:'11px', fontStyle:'italic', color:'#64748b'}}>"{t.note}"</p>}
-                                                    </div>
-                                                </div>
-                                                <div style={{ fontWeight: '700', color: isExpense ? 'var(--danger-red)' : 'var(--success-green)', fontSize: '15px' }}>{isExpense ? '-' : '+'}{formatRupiah(t.amount)}</div>
-                                            </>
-                                        )}
-                                    </div>
-                                );
-                            })}
-                        </div>
+                          {groupedData[dateKey].map((t) => {
+                              const isExpense = t.type === 'expense';
+                              const isOther = t.userId === 'other';
+                              const userPhoto = !isOther ? userMap[t.userId]?.photo : null;
+                              const displayName = isOther ? (t.note || "Other") : (userMap[t.userId]?.nickname || t.userName);
+                              
+                              return (
+                                  <div 
+                                      className="user-card" 
+                                      key={t.id} 
+                                      style={{ 
+                                          minHeight: 'auto', 
+                                          cursor: 'pointer',
+                                          position: 'relative',
+                                          overflow: 'hidden',
+                                          transition: 'all 0.3s',
+                                          borderLeft: `4px solid ${isExpense ? 'var(--danger-red)' : 'var(--success-green)'}`,
+                                          opacity: t.isCheckpoint ? 0.7 : 1,
+                                          // Pastikan layout card menggunakan Flexbox yang rapi
+                                          display: 'flex',
+                                          alignItems: 'center', // Vertikal tengah
+                                          justifyContent: 'space-between', // Kiri dan Kanan mentok
+                                          padding: '12px' // Padding agar tidak mepet
+                                      }}
+                                      onClick={() => handleCardClick(t.id)}
+                                  >
+                                      {t.isCheckpoint && (
+                                          <div style={{position:'absolute', top:0, right:0, fontSize:'9px', background:'#e2e8f0', padding:'2px 6px', borderBottomLeftRadius:'4px', color:'#64748b'}}>
+                                              Checkpoint
+                                          </div>
+                                      )}
+
+                                      {activeCardId === t.id ? (
+                                          // --- TAMPILAN MENU (EDIT/DELETE) ---
+                                          <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center', width: '100%', height: '100%', animation: 'fadeIn 0.2s' }}>
+                                              <button onClick={(e) => handleOpenEdit(e, t)} style={{ background: '#3b82f6', color: 'white', border: 'none', padding: '10px', borderRadius: '50%', width: '40px', height: '40px', cursor:'pointer' }}><i className="fa-solid fa-pen-to-square"></i></button>
+                                              <button onClick={(e) => handleOpenDelete(e, t)} style={{ background: '#ef4444', color: 'white', border: 'none', padding: '10px', borderRadius: '50%', width: '40px', height: '40px', cursor:'pointer' }}><i className="fa-solid fa-trash-can"></i></button>
+                                              <button onClick={handleCancelAction} style={{ background: '#9ca3af', color: 'white', border: 'none', padding: '10px', borderRadius: '50%', width: '40px', height: '40px', cursor:'pointer' }}><i className="fa-solid fa-rotate-left"></i></button>
+                                          </div>
+                                      ) : (
+                                          // --- TAMPILAN INFO NORMAL ---
+                                          <>
+                                              {/* Wrapper Kiri: Avatar + Teks */}
+                                              <div style={{ 
+                                                  display: 'flex', 
+                                                  alignItems: 'center', 
+                                                  gap: '12px', 
+                                                  flex: 1, // Mengambil sisa ruang yang ada
+                                                  minWidth: 0 // PENTING: Agar text truncation berfungsi di flexbox
+                                              }}>
+                                                  
+                                                  {/* 1. AVATAR (FIX BULAT) */}
+                                                  <div className="avatar" style={{ 
+                                                      backgroundColor: userPhoto ? 'transparent' : (isOther ? '#f59e0b' : (isExpense ? '#ef4444' : '#2563eb')),
+                                                      backgroundImage: userPhoto ? `url(${userPhoto})` : 'none',
+                                                      backgroundSize: 'cover',
+                                                      backgroundPosition: 'center',
+                                                      border: '1px solid #e2e8f0',
+                                                      color: userPhoto ? 'transparent' : 'white',
+                                                      // --- PERBAIKAN CSS AVATAR ---
+                                                      width: '48px',      // Lebar fix
+                                                      height: '48px',     // Tinggi fix
+                                                      minWidth: '48px',   // Jangan pernah mengecil (squish)
+                                                      flexShrink: 0,      // Jangan mau ditekan oleh elemen lain
+                                                      borderRadius: '50%', // Bulat sempurna
+                                                      display: 'flex',
+                                                      alignItems: 'center',
+                                                      justifyContent: 'center',
+                                                      fontSize: '16px',
+                                                      fontWeight: 'bold'
+                                                  }}>
+                                                      {!userPhoto && (isOther ? <i className="fa-solid fa-school"></i> : getInitials(displayName))}
+                                                  </div>
+                                                  
+                                                  {/* 2. TEXT INFO */}
+                                                  <div className="info" style={{ minWidth: 0 }}> {/* minWidth 0 agar text-overflow jalan */}
+                                                      <h3 style={{ 
+                                                          display: '-webkit-box',
+                                                          WebkitLineClamp: 2, // Maksimal 2 baris
+                                                          WebkitBoxOrient: 'vertical',
+                                                          overflow: 'hidden',
+                                                          fontSize: '14px',
+                                                          fontWeight: '600',
+                                                          lineHeight: '1.3', // Spasi antar baris teks
+                                                          margin: 0,
+                                                          wordBreak: 'break-word' // Potong kata jika terlalu panjang
+                                                      }}>
+                                                          {displayName}
+                                                      </h3>
+                                                      
+                                                      <div style={{
+                                                          fontSize:'11px', 
+                                                          color: isExpense ? 'var(--danger-red)' : 'var(--success-green)', 
+                                                          fontWeight:'700', 
+                                                          textTransform:'uppercase',
+                                                          marginTop: '2px'
+                                                      }}>
+                                                          {isOther ? 'Operational' : (isExpense ? 'Expense' : 'Income')}
+                                                      </div>
+                                                      
+                                                      {!isOther && t.note && (
+                                                          <p style={{
+                                                              fontSize:'11px', 
+                                                              fontStyle:'italic', 
+                                                              color:'#64748b', 
+                                                              margin: '2px 0 0 0',
+                                                              whiteSpace: 'nowrap',
+                                                              overflow: 'hidden',
+                                                              textOverflow: 'ellipsis'
+                                                          }}>
+                                                              "{t.note}"
+                                                          </p>
+                                                      )}
+                                                  </div>
+                                              </div>
+
+                                              {/* 3. HARGA (KANAN) */}
+                                              <div style={{ 
+                                                  fontWeight: '700', 
+                                                  color: isExpense ? 'var(--danger-red)' : 'var(--success-green)', 
+                                                  fontSize: '15px',
+                                                  // --- PERBAIKAN CSS HARGA ---
+                                                  whiteSpace: 'nowrap', // PENTING: Agar tanda (-) dan angka tidak pisah baris
+                                                  marginLeft: '10px',   // Jarak aman dari teks
+                                                  flexShrink: 0         // Jangan mau mengecil
+                                              }}>
+                                                  {isExpense ? '-' : '+'}{formatRupiah(t.amount)}
+                                              </div>
+                                          </>
+                                      )}
+                                  </div>
+                              );
+                          })}
+                      </div>
                     </div>
                 )
             })
