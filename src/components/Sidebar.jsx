@@ -92,6 +92,15 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
           </li>
           <li>
             <NavLink 
+              to="/event-transaction" 
+              className={({ isActive }) => `menu-item ${isActive ? 'active' : ''}`}
+              onClick={handleLinkClick} 
+            >
+              <i className="fa-solid fa-calendar-check"></i> Eventual Transaction
+            </NavLink>
+          </li>
+          <li>
+            <NavLink 
               to="/other-transaction" 
               className={({ isActive }) => `menu-item ${isActive ? 'active' : ''}`}
               onClick={handleLinkClick} 
