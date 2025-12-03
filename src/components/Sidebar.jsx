@@ -51,7 +51,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
               className={({ isActive }) => `menu-item ${isActive ? 'active' : ''}`}
               onClick={handleLinkClick} // <--- Tambahkan di sini
             >
-              <i className="fa-solid fa-dollar-sign"></i> Income Management
+              <i className="fa-solid fa-dollar-sign"></i> Balance Mgt.
             </NavLink>
           </li>
           <li>
@@ -90,7 +90,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
               <i class="fa-solid fa-users"></i> User Management
             </NavLink>
           </li>
-          <li>
+          {/* <li>
             <NavLink 
               to="/event-transaction" 
               className={({ isActive }) => `menu-item ${isActive ? 'active' : ''}`}
@@ -107,7 +107,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
             >
               <i className="fa-solid fa-cash-register"></i> Other Transaction
             </NavLink>
-          </li>
+          </li> */}
         </ul>
         
         {/* Tombol Logout */}

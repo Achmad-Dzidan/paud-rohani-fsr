@@ -14,6 +14,9 @@ const EventTransactions = () => {
   const [type, setType] = useState('income'); // income (Tunai) / expense (Potong Tabungan)
   const [loading, setLoading] = useState(false);
   
+  // State untuk Filter Dropdown
+  const [paidStudentIds, setPaidStudentIds] = useState(new Set());
+
   // Modal Konfirmasi & Add Event
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showEventModal, setShowEventModal] = useState(false);
@@ -21,9 +24,9 @@ const EventTransactions = () => {
   // State Perhitungan untuk Modal
   const [calculation, setCalculation] = useState({
     currentBalance: 0,
-    eventPrice: 0,  // Harga event asli
-    fee: 0,         // 10% jika expense
-    totalDeduction: 0 // Total yang dipotong (Price + Fee)
+    eventPrice: 0,
+    fee: 0,
+    totalDeduction: 0
   });
 
   // Form Transaksi
@@ -31,7 +34,7 @@ const EventTransactions = () => {
     userId: '',
     eventId: '',
     eventName: '', 
-    amount: '',    // Input dalam ribuan
+    amount: '',
     date: new Date().toISOString().split('T')[0],
   });
 
@@ -61,9 +64,43 @@ const EventTransactions = () => {
     fetchInitialData();
   }, []);
 
+  // 2. CEK SIAPA YANG SUDAH BAYAR (Untuk Filter Dropdown)
+  useEffect(() => {
+      if (!formData.eventId) return;
+
+      const checkPaidStatus = async () => {
+          // Cari transaksi dengan eventId yang sama
+          const q = query(
+              collection(db, "transactions"), 
+              where("category", "==", "event"),
+              where("eventId", "==", formData.eventId)
+          );
+          
+          const snapshot = await getDocs(q);
+          const paidIds = new Set();
+          
+          snapshot.forEach(doc => {
+              const data = doc.data();
+              
+              // Jika Expense (Potong Tabungan), ID siswa ada di userId
+              if (data.type === 'expense') {
+                  paidIds.add(data.userId);
+              } 
+              // Jika Income (Tunai), ID siswa mungkin tersimpan di field khusus 'studentIdRef' atau kita parsing dari Note (tapi lebih aman simpan ref)
+              // *PERBAIKAN*: Di handleFinalSubmit nanti kita akan simpan studentIdRef agar bisa dilacak
+              else if (data.studentIdRef) {
+                  paidIds.add(data.studentIdRef);
+              }
+          });
+          
+          setPaidStudentIds(paidIds);
+      };
+
+      checkPaidStatus();
+  }, [formData.eventId]); // Jalankan ulang saat Event berubah
+
   // --- HANDLERS ---
 
-  // Saat Event Dipilih -> Auto isi Amount
   const handleEventChange = (e) => {
       const selectedId = e.target.value;
       const selectedEvent = events.find(ev => ev.id === selectedId);
@@ -73,16 +110,14 @@ const EventTransactions = () => {
               ...prev,
               eventId: selectedId,
               eventName: selectedEvent.name,
-              amount: selectedEvent.price / 1000 // Konversi ke format ribuan (20000 -> 20)
+              amount: selectedEvent.price / 1000
           }));
       }
   };
 
-  // Simpan Event Baru
   const handleAddEvent = async (e) => {
       e.preventDefault();
       if(!newEvent.name || !newEvent.price) return;
-      
       try {
           await addDoc(collection(db, "events"), {
               name: newEvent.name,
@@ -97,7 +132,6 @@ const EventTransactions = () => {
       }
   };
 
-  // Fungsi Hitung Saldo User (Untuk ditampilkan di Modal)
   const getUserBalance = async (userId) => {
     const q = query(collection(db, "transactions"), where("userId", "==", userId));
     const snapshot = await getDocs(q);
@@ -110,7 +144,6 @@ const EventTransactions = () => {
     return bal;
   };
 
-  // Pre-Submit Transaksi (Hitung-hitungan dulu)
   const handlePreSubmit = async (e) => {
     e.preventDefault();
     if (!formData.userId || !formData.eventId || !formData.amount) {
@@ -118,16 +151,14 @@ const EventTransactions = () => {
       return;
     }
 
-    // Hitung Rincian
     const currentBal = await getUserBalance(formData.userId);
     const realPrice = parseInt(formData.amount) * 1000;
     
     let adminFee = 0;
     let totalCut = realPrice;
 
-    // LOGIKA ADMIN FEE 10% (Hanya jika Expense/Potong Tabungan)
     if (type === 'expense') {
-        adminFee = realPrice * 0.10; // 10%
+        adminFee = realPrice * 0.10; 
         totalCut = realPrice + adminFee;
     }
 
@@ -141,38 +172,60 @@ const EventTransactions = () => {
     setShowConfirmModal(true);
   };
 
-  // Final Submit
+  // Final Submit (MODIFIED)
   const handleFinalSubmit = async () => {
     setLoading(true);
     try {
       const selectedUser = users.find(u => u.id === formData.userId);
       const userName = selectedUser ? selectedUser.name : 'Unknown';
       
-      // Buat Note Otomatis yang Informatif
-      let noteText = `[Event] ${formData.eventName}`;
-      
-      if (type === 'expense') {
+      let finalUserId = formData.userId;
+      let finalUserName = userName;
+      let finalNote = `[Event] ${formData.eventName}`;
+      let finalAmount = calculation.eventPrice; // Default Amount
+
+      // LOGIKA UTAMA
+      if (type === 'income') {
+          // --- CASH (TUNAI) ---
+          // Simpan sebagai 'other' agar tidak masuk savings siswa
+          finalUserId = 'other';
+          finalUserName = 'Other Transaction'; 
+          
+          // Catat nama siswa di Note agar admin tahu
+          finalNote += ` (Tunai oleh: ${userName})`;
+          
+          // Amount tetap harga event (pemasukan sekolah)
+          finalAmount = calculation.eventPrice;
+
+      } else {
+          // --- EXPENSE (TABUNGAN) ---
+          // Simpan dengan ID Siswa agar saldo terpotong
+          finalUserId = formData.userId; // Tetap ID Siswa
+          
+          // Tambahkan info fee di note
           const priceStr = calculation.eventPrice.toLocaleString('id-ID');
           const feeStr = calculation.fee.toLocaleString('id-ID');
-          noteText += ` (Potong Tabungan: Rp ${priceStr} + Adm: Rp ${feeStr})`;
-      } else {
-          noteText += ` (Pembayaran Tunai)`;
+          finalNote += ` (Potong Tabungan: Rp ${priceStr} + Adm: Rp ${feeStr})`;
+          
+          // Amount adalah Total (Harga + Fee)
+          finalAmount = calculation.totalDeduction;
       }
 
       await addDoc(collection(db, "transactions"), {
-        userId: formData.userId,
-        userName: userName,
+        userId: finalUserId,
+        userName: finalUserName,
         
-        // PENTING: Jika expense, simpan TOTAL (Harga + Fee) agar saldo terpotong sesuai
-        amount: type === 'expense' ? calculation.totalDeduction : calculation.eventPrice,
-        
+        // Field baru: Referensi Siswa Asli (PENTING UNTUK FILTER)
+        // Walaupun userId='other', kita tetap tahu ini bayaran siapa
+        studentIdRef: formData.userId, 
+
+        amount: finalAmount,
         date: formData.date,
-        note: noteText,
+        note: finalNote,
         
-        type: type, // income = nambah kas sekolah (tunai), expense = kurangi tabungan siswa
+        type: type, 
         category: 'event',
         eventId: formData.eventId,
-        
         isCheckpoint: false,
         createdAt: serverTimestamp()
       });
@@ -180,11 +233,10 @@ const EventTransactions = () => {
       toast.success("Transaksi event berhasil!");
       setShowConfirmModal(false);
       
-      // Reset Form (Kecuali tanggal & event, untuk input massal)
-      setFormData(prev => ({
-        ...prev,
-        userId: '', 
-      }));
+      // Update Filter Lokal (Agar nama hilang dari dropdown instan)
+      setPaidStudentIds(prev => new Set(prev).add(formData.userId));
+      
+      setFormData(prev => ({ ...prev, userId: '' }));
 
     } catch (error) {
       toast.error("Gagal menyimpan: " + error.message);
@@ -193,9 +245,11 @@ const EventTransactions = () => {
     }
   };
 
-  // Helper Format
   const fmt = (n) => n.toLocaleString('id-ID');
   const formatRupiah = (num) => "Rp " + new Intl.NumberFormat('id-ID').format(num);
+
+  // Filter User yang belum bayar
+  const availableUsers = users.filter(u => !paidStudentIds.has(u.id));
 
   return (
     <div style={{ width: '100%' }}>
@@ -213,8 +267,6 @@ const EventTransactions = () => {
 
       {/* FORM CARD */}
       <div className="form-card">
-        
-        {/* Toggle Type */}
         <div className="toggle-container">
           <button type="button" className={`toggle-btn ${type === 'income' ? 'active-income' : ''}`} onClick={() => setType('income')}>
             <i className="fa-solid fa-money-bill-wave"></i> Pay Cash (Tunai)
@@ -225,65 +277,44 @@ const EventTransactions = () => {
         </div>
 
         <form onSubmit={handlePreSubmit}>
-          
-          {/* EVENT SELECTION */}
           <div className="form-group">
              <label className="form-label">Select Event *</label>
              <div style={{display:'flex', gap:'10px'}}>
-                 <select 
-                    className="form-control" 
-                    required 
-                    value={formData.eventId} 
-                    onChange={handleEventChange}
-                    style={{flex:1}}
-                 >
+                 <select className="form-control" required value={formData.eventId} onChange={handleEventChange} style={{flex:1}}>
                     <option value="" disabled>Pilih Kegiatan...</option>
                     {events.map(ev => (
                         <option key={ev.id} value={ev.id}>{ev.name} - {formatRupiah(ev.price)}</option>
                     ))}
                  </select>
-                 <button 
-                    type="button" 
-                    className="btn-add" 
-                    style={{width:'auto', padding:'0 15px', marginTop:0}}
-                    onClick={() => setShowEventModal(true)}
-                    title="Buat Event Baru"
-                 >
-                     <i className="fa-solid fa-plus"></i>
-                 </button>
+                 <button type="button" className="btn-add" style={{width:'auto', padding:'0 15px', marginTop:0}} onClick={() => setShowEventModal(true)} title="Buat Event Baru"><i className="fa-solid fa-plus"></i></button>
              </div>
           </div>
 
-          {/* AMOUNT (AUTO FILLED) */}
           <div className="form-group">
             <label className="form-label">Amount (Dalam Ribuan) *</label>
             <div style={{position:'relative'}}>
-                <input 
-                    type="number" 
-                    className="form-control" 
-                    required 
-                    min="1" 
-                    value={formData.amount} 
-                    onChange={(e) => setFormData({...formData, amount: e.target.value})} 
-                />
+                <input type="number" className="form-control" required min="1" value={formData.amount} onChange={(e) => setFormData({...formData, amount: e.target.value})} />
                 {formData.amount && <div style={{position:'absolute', right:'10px', top:'12px', fontSize:'12px', color:'green', fontWeight:'bold'}}>= {formatRupiah(parseInt(formData.amount) * 1000)}</div>}
             </div>
           </div>
 
-          {/* STUDENT SELECTION */}
+          {/* STUDENT SELECTION (FILTERED) */}
           <div className="form-group">
             <label className="form-label">Select Student *</label>
-            <select 
-                className="form-control" 
-                required 
-                value={formData.userId} 
-                onChange={(e) => setFormData({...formData, userId: e.target.value})}
-            >
-                <option value="" disabled>Pilih Siswa...</option>
-                {users.map(u => (
+            <select className="form-control" required value={formData.userId} onChange={(e) => setFormData({...formData, userId: e.target.value})}>
+                <option value="" disabled>
+                    {availableUsers.length === 0 ? (formData.eventId ? "Semua siswa sudah lunas!" : "Pilih Event dulu...") : "Pilih Siswa..."}
+                </option>
+                {availableUsers.map(u => (
                     <option key={u.id} value={u.id}>{u.name}</option>
                 ))}
             </select>
+            {/* Info Helper */}
+            {formData.eventId && (
+                <p style={{fontSize:'11px', color:'#64748b', marginTop:'5px'}}>
+                    * Menampilkan siswa yang <b>belum bayar</b> untuk kegiatan ini.
+                </p>
+            )}
           </div>
 
           <div className="form-group">
@@ -297,102 +328,42 @@ const EventTransactions = () => {
         </form>
       </div>
 
-      {/* --- MODAL ADD EVENT --- */}
+      {/* MODALS (Add Event & Confirm - Sama seperti sebelumnya) */}
       {showEventModal && (
           <div className="modal-overlay active" style={{display:'flex'}}>
              <div className="modal-box">
-                <div className="modal-header">
-                    <h3>New Event</h3>
-                    <button className="close-modal" onClick={() => setShowEventModal(false)}>&times;</button>
-                </div>
+                <div className="modal-header"><h3>New Event</h3><button className="close-modal" onClick={() => setShowEventModal(false)}>&times;</button></div>
                 <form onSubmit={handleAddEvent}>
                     <div className="modal-body">
                         <label style={{fontSize:'13px', fontWeight:'600'}}>Nama Kegiatan</label>
-                        <input type="text" className="form-control" placeholder="Contoh: Renang, Outing..." required value={newEvent.name} onChange={e => setNewEvent({...newEvent, name: e.target.value})} style={{marginBottom:'15px'}}/>
-                        
+                        <input type="text" className="form-control" placeholder="Contoh: Renang..." required value={newEvent.name} onChange={e => setNewEvent({...newEvent, name: e.target.value})} style={{marginBottom:'15px'}}/>
                         <label style={{fontSize:'13px', fontWeight:'600'}}>Fixed Price (Rupiah Penuh)</label>
                         <input type="number" className="form-control" placeholder="Contoh: 20000" required value={newEvent.price} onChange={e => setNewEvent({...newEvent, price: e.target.value})}/>
                     </div>
-                    <div className="modal-footer">
-                        <button type="button" className="btn-cancel" onClick={() => setShowEventModal(false)}>Cancel</button>
-                        <button type="submit" className="btn-save">Save Event</button>
-                    </div>
+                    <div className="modal-footer"><button type="button" className="btn-cancel" onClick={() => setShowEventModal(false)}>Cancel</button><button type="submit" className="btn-save">Save Event</button></div>
                 </form>
              </div>
           </div>
       )}
 
-      {/* --- MODAL CONFIRM TRANSACTION --- */}
       {showConfirmModal && (
         <div className="popup-overlay" style={{ display: 'flex' }}>
           <div className="popup-box">
             <h3>Confirm Transaction</h3>
             <p style={{marginBottom:'15px', color:'#64748b'}}>Please review the details:</p>
-            
             <div className="popup-details" style={{background:'#f8fafc', padding:'15px', borderRadius:'8px', fontSize:'13px'}}>
-              
-              {/* Info Dasar */}
-              <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px'}}>
-                  <span>Event:</span><b>{formData.eventName}</b>
-              </div>
-              <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px'}}>
-                  <span>Student:</span><b>{users.find(u=>u.id===formData.userId)?.name}</b>
-              </div>
-              <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px', color: type==='income'?'green':'red', fontWeight:'bold'}}>
-                  <span>Method:</span><span>{type === 'income' ? 'Cash (Tunai)' : 'Savings (Tabungan)'}</span>
-              </div>
-
+              <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px'}}><span>Event:</span><b>{formData.eventName}</b></div>
+              <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px'}}><span>Student:</span><b>{users.find(u=>u.id===formData.userId)?.name}</b></div>
+              <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px', color: type==='income'?'green':'red', fontWeight:'bold'}}><span>Method:</span><span>{type === 'income' ? 'Cash (Tunai)' : 'Savings (Tabungan)'}</span></div>
               <div style={{borderTop:'1px dashed #cbd5e1', margin:'10px 0'}}></div>
-
-              {/* Rincian Saldo (Khusus Expense) */}
-              {type === 'expense' && (
-                <div style={{marginBottom:'10px', color:'#64748b'}}>
-                    <div style={{display:'flex', justifyContent:'space-between'}}>
-                        <span>Current Balance:</span><span>Rp {fmt(calculation.currentBalance)}</span>
-                    </div>
-                </div>
-              )}
-
-              {/* Rincian Harga */}
-              <div style={{display:'flex', justifyContent:'space-between', marginBottom:'5px'}}>
-                  <span>Event Price:</span>
-                  <span>Rp {fmt(calculation.eventPrice)}</span>
-              </div>
-
-              {/* Admin Fee (Hanya jika Expense) */}
-              {type === 'expense' && (
-                  <div style={{display:'flex', justifyContent:'space-between', marginBottom:'5px', color:'#b91c1c'}}>
-                      <span>@ Admin Fee (10%):</span>
-                      <span>+ Rp {fmt(calculation.fee)}</span>
-                  </div>
-              )}
-
+              {type === 'expense' && (<div style={{marginBottom:'10px', color:'#64748b'}}><div style={{display:'flex', justifyContent:'space-between'}}><span>Current Balance:</span><span>Rp {fmt(calculation.currentBalance)}</span></div></div>)}
+              <div style={{display:'flex', justifyContent:'space-between', marginBottom:'5px'}}><span>Event Price:</span><span>Rp {fmt(calculation.eventPrice)}</span></div>
+              {type === 'expense' && (<div style={{display:'flex', justifyContent:'space-between', marginBottom:'5px', color:'#b91c1c'}}><span>@ Admin Fee (10%):</span><span>+ Rp {fmt(calculation.fee)}</span></div>)}
               <div style={{borderTop:'1px dashed #cbd5e1', margin:'10px 0'}}></div>
-
-              {/* TOTAL */}
-              <div style={{display:'flex', justifyContent:'space-between', fontSize:'15px', fontWeight:'bold'}}>
-                  <span>Total {type === 'expense' ? 'Deducted' : 'Income'}:</span>
-                  <span style={{color: type === 'expense' ? 'red' : 'green'}}>
-                      Rp {fmt(type === 'expense' ? calculation.totalDeduction : calculation.eventPrice)}
-                  </span>
-              </div>
-
-              {/* Estimasi Sisa Saldo (Khusus Expense) */}
-              {type === 'expense' && (
-                  <div style={{display:'flex', justifyContent:'space-between', marginTop:'10px', color:'blue', fontWeight:'bold'}}>
-                      <span>New Balance:</span>
-                      <span>Rp {fmt(calculation.currentBalance - calculation.totalDeduction)}</span>
-                  </div>
-              )}
-
+              <div style={{display:'flex', justifyContent:'space-between', fontSize:'15px', fontWeight:'bold'}}><span>Total {type === 'expense' ? 'Deducted' : 'Income'}:</span><span style={{color: type === 'expense' ? 'red' : 'green'}}>Rp {fmt(type === 'expense' ? calculation.totalDeduction : calculation.eventPrice)}</span></div>
+              {type === 'expense' && (<div style={{display:'flex', justifyContent:'space-between', marginTop:'10px', color:'blue', fontWeight:'bold'}}><span>New Balance:</span><span>Rp {fmt(calculation.currentBalance - calculation.totalDeduction)}</span></div>)}
             </div>
-
-            <div className="popup-actions">
-              <button className="cancel-btn" onClick={() => setShowConfirmModal(false)} disabled={loading}>Cancel</button>
-              <button className="confirm-btn" onClick={handleFinalSubmit} disabled={loading}>
-                {loading ? 'Processing...' : 'Confirm'}
-              </button>
-            </div>
+            <div className="popup-actions"><button className="cancel-btn" onClick={() => setShowConfirmModal(false)} disabled={loading}>Cancel</button><button className="confirm-btn" onClick={handleFinalSubmit} disabled={loading}>{loading ? 'Processing...' : 'Confirm'}</button></div>
           </div>
         </div>
       )}

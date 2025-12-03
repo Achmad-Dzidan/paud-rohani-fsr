@@ -8,8 +8,8 @@ import Users from './pages/Users';
 import Absensi from './pages/Absensi';
 import DailyIncome from './pages/DailyIncome';
 import StudentSavings from './pages/StudentSavings';
-import OtherTransaction from './pages/OtherTransaction'; 
-import EventTransactions from './pages/EventTransactions'; 
+// import OtherTransaction from './pages/OtherTransaction'; 
+// import EventTransactions from './pages/EventTransactions'; 
 
 // Buat komponen dummy untuk Income/Users sementara
 // const Income = () => <h1>Income Page</h1>;
@@ -30,8 +30,8 @@ function App() {
           <Route path="/savings" element={<StudentSavings />} />
           <Route path="/users" element={<Users />} />
           <Route path="/absensi" element={<Absensi />} />
-          <Route path="/other-transaction" element={<OtherTransaction />} />
-          <Route path="/event-transaction" element={<EventTransactions />} />
+          {/* <Route path="/other-transaction" element={<OtherTransaction />} />
+          <Route path="/event-transaction" element={<EventTransactions />} /> */}
         </Route>
       </Routes>
     </Router>
