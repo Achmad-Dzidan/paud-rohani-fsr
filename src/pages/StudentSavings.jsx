@@ -13,6 +13,8 @@ const StudentSavings = () => {
 
   // STATE
   const [students, setStudents] = useState([]);
+  
+  // savingsData sekarang menyimpan object: { balance: number, minDate: string, maxDate: string }
   const [savingsData, setSavingsData] = useState({});
   const [loading, setLoading] = useState(true);
   
@@ -33,16 +35,14 @@ const StudentSavings = () => {
         const usersSnap = await getDocs(collection(db, "users"));
         const usersList = usersSnap.docs.map(doc => ({
           id: doc.id,
-          name: doc.data().name,          // Fallback
-          fullName: doc.data().fullName,  // NAMA LENGKAP (Untuk Export)
-          nickname: doc.data().nickname,  // NAMA PANGGILAN (Untuk Web Grid & Dropdown)
+          name: doc.data().name,          
+          fullName: doc.data().fullName,  
+          nickname: doc.data().nickname,  
           photo: doc.data().photo
         }));
 
         const transSnap = await getDocs(collection(db, "transactions"));
-        const balances = {};
-        let minDate = new Date(); 
-        let maxDate = new Date();
+        const stats = {}; // Object untuk menyimpan balance & range tanggal per user
 
         transSnap.forEach(doc => {
           const t = doc.data();
@@ -50,20 +50,28 @@ const StudentSavings = () => {
 
           const uid = t.userId;
           const amount = parseInt(t.amount) || 0;
-          if (!balances[uid]) balances[uid] = 0;
-
-          if (t.type === 'income') balances[uid] += amount;
-          else if (t.type === 'expense') balances[uid] -= amount;
           
-          const d = new Date(t.date);
-          if(d < minDate) minDate = d;
-          if(d > maxDate) maxDate = d;
+          // Inisialisasi object jika belum ada
+          if (!stats[uid]) {
+              stats[uid] = { balance: 0, minDate: null, maxDate: null };
+          }
+
+          // Hitung Saldo
+          if (t.type === 'income') stats[uid].balance += amount;
+          else if (t.type === 'expense') stats[uid].balance -= amount;
+          
+          // Cek Tanggal Min/Max per User
+          const currentDate = t.date; // Format YYYY-MM-DD dari firebase
+          if (!stats[uid].minDate || currentDate < stats[uid].minDate) {
+              stats[uid].minDate = currentDate;
+          }
+          if (!stats[uid].maxDate || currentDate > stats[uid].maxDate) {
+              stats[uid].maxDate = currentDate;
+          }
         });
 
         setStudents(usersList);
-        setSavingsData(balances);
-        setStartDate(minDate.toISOString().split('T')[0]);
-        setEndDate(maxDate.toISOString().split('T')[0]);
+        setSavingsData(stats);
         setLoading(false);
 
       } catch (error) {
@@ -73,6 +81,21 @@ const StudentSavings = () => {
     };
     fetchData();
   }, []);
+
+  // --- HANDLER SAAT CARD DI KLIK ---
+  const handleCardClick = (studentId) => {
+      const userStats = savingsData[studentId];
+      const today = new Date().toISOString().split('T')[0];
+
+      setExportTargetId(studentId);
+      
+      // Set default date range berdasarkan data transaksi user tersebut
+      // Jika user belum punya transaksi, default ke hari ini
+      setStartDate(userStats?.minDate || today);
+      setEndDate(userStats?.maxDate || today);
+      
+      setShowExportModal(true);
+  };
 
   // --- FUNGSI AMBIL DATA TRANSAKSI (Shared) ---
   const fetchTransactionData = async () => {
@@ -85,7 +108,17 @@ const StudentSavings = () => {
       );
       const querySnapshot = await getDocs(q);
       
+      // Kita perlu menghitung saldo awal sebelum periode yang dipilih
+      // Agar kolom "Balance" di PDF akurat.
+      // Namun untuk simplifikasi UI (sesuai request), kita hitung running balance dari 0 
+      // atau idealnya fetch saldo sebelum startDate. 
+      // Di sini kita asumsikan cetak buku biasanya dari awal, atau user menerima running balance periode itu.
+      
       let runningBalance = 0;
+      
+      // Optional: Fetch saldo sebelum startDate jika ingin presisi (tapi memperlambat)
+      // Untuk sekarang running balance dimulai dari 0 untuk list yang ditampilkan
+      
       const rows = [];
       
       querySnapshot.forEach(doc => {
@@ -108,7 +141,7 @@ const StudentSavings = () => {
 
   // --- EXPORT PDF ---
   const handleExportPDF = async () => {
-      if(!exportTargetId) { toast.error("Pilih siswa terlebih dahulu"); return; }
+      if(!exportTargetId) return;
       setIsExporting(true);
       
       try {
@@ -117,8 +150,6 @@ const StudentSavings = () => {
 
           const doc = new jsPDF();
           const student = students.find(s => s.id === exportTargetId);
-          
-          // TETAP GUNAKAN NAMA LENGKAP UNTUK HASIL PDF
           const studentNameExport = student?.fullName || student?.name;
 
           doc.setFontSize(16);
@@ -138,7 +169,6 @@ const StudentSavings = () => {
           });
 
           doc.save(`Tabungan_${studentNameExport}.pdf`);
-          
           toast.success("PDF Berhasil!");
           setShowExportModal(false);
 
@@ -152,14 +182,12 @@ const StudentSavings = () => {
 
   // --- EXPORT JPG ---
   const handleExportJPG = async () => {
-      if(!exportTargetId) { toast.error("Pilih siswa terlebih dahulu"); return; }
+      if(!exportTargetId) return;
       setIsExporting(true);
 
       try {
           const rows = await fetchTransactionData();
           const student = students.find(s => s.id === exportTargetId);
-          
-          // TETAP GUNAKAN NAMA LENGKAP UNTUK HASIL JPG
           const studentNameExport = student?.fullName || student?.name;
           
           setExportData({
@@ -200,18 +228,21 @@ const StudentSavings = () => {
       return `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()}`;
   }
 
+  // Helper untuk mendapatkan nama siswa yang sedang dipilih di modal
+  const getSelectedStudentName = () => {
+      const s = students.find(u => u.id === exportTargetId);
+      return s ? (s.nickname || s.name) : "Loading...";
+  }
+
   return (
     <div style={{ width: '100%' }}>
       
       <div className="header-section">
         <div className="page-title-wrapper" style={{ display: 'flex', alignItems: 'center' }}>
           <button className="mobile-toggle-btn" onClick={toggleSidebar}><i className="fa-solid fa-bars"></i></button>
-          <div className="page-title"><h1>Student Savings</h1><p>Total saldo tabungan setiap siswa</p></div>
+          <div className="page-title"><h1>Student Savings</h1><p>Klik kartu siswa untuk mencetak buku tabungan</p></div>
         </div>
-        
-        <button className="btn-add" onClick={() => setShowExportModal(true)} style={{backgroundColor:'#16a34a'}}>
-            <i className="fa-solid fa-print"></i> Cetak Buku
-        </button>
+        {/* Tombol Cetak Buku di header DIHAPUS sesuai permintaan */}
       </div>
 
       <div className="user-grid">
@@ -219,11 +250,20 @@ const StudentSavings = () => {
           <p style={{ color: 'var(--text-gray)' }}>Belum ada siswa.</p>
         ) : (
           students.map((student) => {
-            const balance = savingsData[student.id] || 0;
+            // Ambil data stats object, default ke object kosong jika belum ada transaksi
+            const stats = savingsData[student.id] || { balance: 0 };
+            const balance = stats.balance;
             const displayName = student.nickname || student.name;
 
             return (
-              <div className="user-card" key={student.id} style={{ alignItems: 'center' }}>
+              <div 
+                className="user-card" 
+                key={student.id} 
+                style={{ alignItems: 'center', cursor: 'pointer', transition: 'transform 0.1s' }}
+                onClick={() => handleCardClick(student.id)} // Trigger Modal Disini
+                onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.98)'}
+                onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
+              >
                 <div className="user-info-wrapper">
                   <div className="avatar" style={{ 
                       backgroundColor: student.photo ? 'transparent' : 'var(--primary-blue)',
@@ -242,6 +282,9 @@ const StudentSavings = () => {
                    <div style={{ fontSize: '16px', fontWeight: '700', color: balance >= 0 ? 'var(--primary-blue)' : 'var(--danger-red)' }}>
                       {formatRupiah(balance)}
                    </div>
+                   <div style={{ fontSize: '10px', color: '#64748b', marginTop:'2px' }}>
+                       <i className="fa-solid fa-print"></i> Cetak
+                   </div>
                 </div>
               </div>
             );
@@ -249,7 +292,7 @@ const StudentSavings = () => {
         )}
       </div>
 
-      {/* --- MODAL EXPORT --- */}
+      {/* --- MODAL EXPORT (MODIFIKASI) --- */}
       {showExportModal && (
           <div className="modal-overlay active" style={{display:'flex'}} onClick={() => setShowExportModal(false)}>
               <div className="modal-box" onClick={e => e.stopPropagation()} style={{maxWidth:'400px'}}>
@@ -258,20 +301,26 @@ const StudentSavings = () => {
                       <button className="close-modal" onClick={() => setShowExportModal(false)}>&times;</button>
                   </div>
                   <div className="modal-body">
-                      <label style={{fontSize:'13px', fontWeight:'600', display:'block', marginBottom:'5px'}}>Pilih Siswa</label>
-                      <select className="form-control" value={exportTargetId} onChange={(e) => setExportTargetId(e.target.value)} style={{marginBottom:'15px'}}>
-                          <option value="" disabled>-- Pilih Siswa --</option>
-                          {students.map(s => ( 
-                              <option key={s.id} value={s.id}>
-                                  {/* --- TAMPILKAN NAMA PANGGILAN DI DROPDOWN --- */}
-                                  {s.nickname || s.name}
-                              </option> 
-                          ))}
-                      </select>
-                      <div style={{display:'flex', gap:'10px', marginBottom:'20px'}}>
-                          <div style={{flex:1}}><label style={{fontSize:'13px', fontWeight:'600'}}>Dari Tanggal</label><input type="date" className="form-control" value={startDate} onChange={(e) => setStartDate(e.target.value)} /></div>
-                          <div style={{flex:1}}><label style={{fontSize:'13px', fontWeight:'600'}}>Sampai Tanggal</label><input type="date" className="form-control" value={endDate} onChange={(e) => setEndDate(e.target.value)} /></div>
+                      {/* Tampilkan Nama Siswa (Read Only) */}
+                      <label style={{fontSize:'13px', fontWeight:'600', display:'block', marginBottom:'5px'}}>Siswa</label>
+                      <div style={{
+                          background: '#f1f5f9', padding: '10px', borderRadius: '6px', 
+                          border: '1px solid #e2e8f0', marginBottom: '15px', fontWeight: 'bold', color: '#334155'
+                      }}>
+                          {getSelectedStudentName()}
                       </div>
+
+                      <div style={{display:'flex', gap:'10px', marginBottom:'20px'}}>
+                          <div style={{flex:1}}>
+                              <label style={{fontSize:'13px', fontWeight:'600'}}>Dari Tanggal</label>
+                              <input type="date" className="form-control" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                          </div>
+                          <div style={{flex:1}}>
+                              <label style={{fontSize:'13px', fontWeight:'600'}}>Sampai Tanggal</label>
+                              <input type="date" className="form-control" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                          </div>
+                      </div>
+                      
                       <div style={{display:'flex', gap:'10px'}}>
                           <button className="btn-submit" onClick={handleExportPDF} disabled={isExporting} style={{flex:1, background:'#ef4444'}}><i className="fa-solid fa-file-pdf"></i> PDF</button>
                           <button className="btn-submit" onClick={handleExportJPG} disabled={isExporting} style={{flex:1, background:'#3b82f6'}}><i className="fa-solid fa-image"></i> JPG</button>

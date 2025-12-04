@@ -18,6 +18,9 @@ const Absensi = () => {
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+
+
   // --- MODIFIKASI STATUS CONFIG ---
   const STATUS_CONFIG = {
     '-': { label: '-', color: '#94a3b8', bg: '#f1f5f9', title: 'Tanpa Keterangan' }, // Default (Tidak Disimpan)
@@ -32,9 +35,12 @@ const Absensi = () => {
   useEffect(() => {
     const dates = [];
     let currentDate = new Date(selectedDate);
-    let count = 0;
 
-    while (count < 7) {
+    // MOBILE = 5 hari | DESKTOP = 7 hari
+    const maxDays = windowWidth < 768 ? 5 : 7;
+
+    let count = 0;
+    while (count < maxDays) {
       const dayNum = currentDate.getDay();
       if (dayNum !== 0 && dayNum !== 6) {
         dates.unshift(currentDate.toISOString().split('T')[0]);
@@ -43,7 +49,15 @@ const Absensi = () => {
       currentDate.setDate(currentDate.getDate() - 1);
     }
     setDateRange(dates);
-  }, [selectedDate]);
+  }, [selectedDate, windowWidth]);
+
+
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // 2. FETCH DATA SISWA
   useEffect(() => {
@@ -232,14 +246,14 @@ const Absensi = () => {
           <p style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>Loading data...</p>
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '800px' }}>
+            <table style={{ width: windowWidth < 768 ? '10px' : '100%', borderCollapse: 'collapse', minWidth: '10px' }}>
               <thead>
                 <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
-                  <th style={{ padding: '12px', textAlign: 'left', width: '200px', position: 'sticky', left: 0, background: '#f8fafc', zIndex: 10 }}>Nama Siswa</th>
+                  <th style={{ padding: '12px', textAlign: 'left', width: windowWidth < 768 ? '30px' : '100%', position: 'sticky', left: 0, background: '#f8fafc', zIndex: 10 }}>Nama Siswa</th>
                   {dateRange.map((date) => {
                       const isToday = date === selectedDate;
                       return (
-                        <th key={date} style={{ padding: '12px', textAlign: 'center', fontSize: '13px', background: isToday ? '#eff6ff' : 'transparent', borderLeft: '1px solid #f1f5f9', color: isToday ? 'var(--primary-blue)' : 'var(--text-dark)', fontWeight: isToday ? '700' : '500' }}>
+                        <th key={date} style={{ padding: windowWidth < 768 ? '' : '12px', textAlign: 'center', fontSize: '13px', background: isToday ? '#eff6ff' : 'transparent', borderLeft: '1px solid #f1f5f9', color: isToday ? 'var(--primary-blue)' : 'var(--text-dark)', fontWeight: isToday ? '700' : '500' }}>
                             <div style={{fontSize:'10px', color: isToday?'var(--primary-blue)':'#94a3b8', marginBottom:'2px'}}>{new Date(date).toLocaleDateString('id-ID', { weekday: 'short' })}</div>
                             {formatHeaderDate(date)}
                         </th>
@@ -269,8 +283,8 @@ const Absensi = () => {
                                     border: `1px solid ${style.bg}`, 
                                     borderRadius: '6px', 
                                     padding: '6px 2px', 
-                                    width: '100%', 
-                                    minWidth: '40px', 
+                                    width: windowWidth < 768 ? '30px' : '80px', 
+                                    minWidth: '20px', 
                                     textAlign: 'center', 
                                     fontWeight: 'bold', 
                                     fontSize: '13px', 
