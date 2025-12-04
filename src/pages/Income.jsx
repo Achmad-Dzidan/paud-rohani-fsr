@@ -16,12 +16,14 @@ const StudentSavingsForm = () => {
   
   const [calculation, setCalculation] = useState({ currentBalance: 0, inputAmount: 0, fee: 0, total: 0, newBalance: 0 });
   const [formData, setFormData] = useState({ userId: '', amount: '', date: new Date().toISOString().split('T')[0], note: '' });
-
+  
   // Format Date untuk Tampilan UI
   const formatDateDisplay = (dateStr) => {
-    if (!dateStr) return '-';
-    return new Date(dateStr).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-  };
+      if (!dateStr) return '-';
+      return new Date(dateStr).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    };
+
+  // HAPUS windowWidth DARI SINI (SALAH POSISI)
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -142,7 +144,6 @@ const StudentSavingsForm = () => {
                     <h3>Confirm Transaction</h3>
                     <p style={{marginBottom:'15px', color:'#64748b'}}>Please review financial details:</p>
                     <div className="popup-details" style={{background:'#f8fafc', padding:'15px', borderRadius:'8px', fontSize:'13px'}}>
-                        
                         <div style={{display:'flex', justifyContent:'space-between', marginBottom:'5px'}}>
                              <span style={{color:'#64748b'}}>Student Name:</span>
                              <span style={{fontWeight:'bold', color:'#334155'}}>{users.find(u => u.id === formData.userId)?.name || '-'}</span>
@@ -152,7 +153,6 @@ const StudentSavingsForm = () => {
                              <span style={{fontWeight:'bold', color:'#334155'}}>{formatDateDisplay(formData.date)}</span>
                         </div>
                         <div style={{borderTop:'1px solid #e2e8f0', marginBottom:'10px'}}></div>
-
                         <div style={{display:'flex', justifyContent:'space-between', marginBottom:'5px', color:'#64748b'}}>
                              <span>Current Balance:</span><span>Rp {calculation.currentBalance.toLocaleString('id-ID')}</span>
                         </div>
@@ -250,7 +250,6 @@ const EventForm = () => {
           let finalAmount = calculation.eventPrice;
           let isSkipSavings = false;
 
-          // LOGIC 1: TRANSAKSI SISWA (PENGURANGAN SALDO)
           if (type === 'income') {
               finalUserId = 'other'; 
               finalNote += ` (Tunai: ${user.name})`;
@@ -262,14 +261,12 @@ const EventForm = () => {
               finalAmount = calculation.totalDeduction;
           }
 
-          // Simpan Transaksi Utama (Pengurangan Siswa)
           await addDoc(collection(db, "transactions"), {
               userId: finalUserId, userName: type==='income'?'Other Transaction':user.name, studentIdRef: formData.userId,
               amount: finalAmount, date: formData.date, note: finalNote, type: type, category: 'event', eventId: formData.eventId,
               skipSavings: isSkipSavings, isCheckpoint: false, createdAt: serverTimestamp()
           });
 
-          // LOGIC 2: UANG MASUK KE SEKOLAH (JIKA PAKE TABUNGAN)
           if (type === 'expense') {
              await addDoc(collection(db, "transactions"), {
                 userId: 'other', 
@@ -278,8 +275,8 @@ const EventForm = () => {
                 date: formData.date, 
                 note: `[Income from Event Savings] ${formData.eventName} - ${user.name}`, 
                 type: 'income', 
-                category: 'event', // <--- UPDATE: Kategori di-set 'event' agar tidak dianggap 'operational'
-                eventId: formData.eventId, // Link ke event ID juga
+                category: 'event', 
+                eventId: formData.eventId, 
                 isCheckpoint: false, 
                 createdAt: serverTimestamp()
              });
@@ -447,6 +444,15 @@ const Income = () => {
   const { toggleSidebar } = useOutletContext();
   const [activeTab, setActiveTab] = useState('savings'); 
 
+  // --- STATE DAN EFFECT UNTUK WINDOW WIDTH (PINDAHKAN KE SINI) ---
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   const getMenuStyle = (tabName) => ({
       background: activeTab === tabName ? '#f8fafc' : 'white',
       border: activeTab === tabName ? '2px solid var(--primary-blue)' : '1px solid var(--border-color)',
@@ -465,11 +471,37 @@ const Income = () => {
     <div style={{ width: '100%' }}>
       <div className="centered-header">
         <div className="page-title-wrapper" style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
-          <button className="mobile-toggle-btn" onClick={toggleSidebar}><i className="fa-solid fa-bars"></i></button>
-          <div>
+          
+          {/* BUTTON FLOATING FIXED (Disalin dari Dashboard) */}
+          <button 
+                className="mobile-toggle-btn" 
+                onClick={toggleSidebar}
+                style={{
+                    position: 'fixed', 
+                    top: '20px',       
+                    left: '20px',      
+                    zIndex: 9999,      
+                    background: 'white', 
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '8px',
+                    width: '40px',
+                    height: '40px',
+                    display: windowWidth < 768 ? 'flex' : 'none', // Menggunakan windowWidth
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 4px 6px rgba(0,0,0,0.1)', 
+                    cursor: 'pointer'
+                }}
+            >
+                <i className="fa-solid fa-bars" style={{color: '#334155', fontSize: '16px'}}></i>
+            </button>
+
+          {/* JUDUL YANG BERGESER (Menggunakan windowWidth) */}
+          <div style={{ marginLeft: windowWidth < 768 ? '50px' : '0', transition: 'margin-left 0.2s' }}>
             <h1>Transaction Center</h1>
             <p>Pilih jenis transaksi yang ingin dicatat</p>
           </div>
+
         </div>
       </div>
 

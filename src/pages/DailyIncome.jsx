@@ -51,7 +51,14 @@ const DailyIncome = () => {
     return () => unsubscribe();
   }, []);
 
-  // 3. FETCH ATTENDANCE
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   useEffect(() => {
     const q = query(collection(db, "attendance"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -152,8 +159,29 @@ const DailyIncome = () => {
       {/* HEADER */}
       <div className="header-section">
         <div className="page-title-wrapper" style={{ display: 'flex', alignItems: 'center' }}>
-          <button className="mobile-toggle-btn" onClick={toggleSidebar}><i className="fa-solid fa-bars"></i></button>
-          <div className="page-title">
+          <button 
+              className="mobile-toggle-btn floating-menu-btn" // Tambahkan class floating-menu-btn
+              onClick={toggleSidebar}
+              style={{
+                  position: 'fixed', 
+                  top: '20px',       
+                  left: '20px',      
+                  zIndex: 9999,      
+                  background: 'white', 
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '8px',
+                  width: '40px',
+                  height: '40px',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 4px 6px rgba(0,0,0,0.1)', 
+                  cursor: 'pointer',
+                  // HAPUS baris 'display' dari sini
+              }}
+          >
+              <i className="fa-solid fa-bars" style={{color: '#334155', fontSize: '16px'}}></i>
+          </button>
+          <div className="page-title" style={{ marginLeft: windowWidth < 768 ? '50px' : '0' }}>
             <h1>Daily Flow</h1>
             <p>Monitor Pemasukan & Pengeluaran</p>
           </div>

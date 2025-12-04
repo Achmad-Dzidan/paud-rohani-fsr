@@ -1,53 +1,53 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import Chart from 'chart.js/auto';
-import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, limit, doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
+import { toast } from 'sonner';
 
 const Dashboard = () => {
   const { toggleSidebar } = useOutletContext();
   const chartRef = useRef(null);
   const chartInstance = useRef(null);
 
-  // STATE DATA
+  // --- STATE DATA ---
   const [totalSavings, setTotalSavings] = useState(0);
+  const [totalBrankas, setTotalBrankas] = useState(0); 
   const [recentIncome, setRecentIncome] = useState([]);
   const [todayMissingUsers, setTodayMissingUsers] = useState([]);
   const [historyMissingIncome, setHistoryMissingIncome] = useState([]); 
   const [loading, setLoading] = useState(true);
   const [userMap, setUserMap] = useState({}); 
 
-  // STATE BARU: BRANKAS & REVENUE
-  const [totalBrankas, setTotalBrankas] = useState(() => {
-    return parseInt(localStorage.getItem('savedTotalBrankas')) || 0;
-  });
+  // --- STATE CHECKPOINT BRANKAS ---
+  const [checkpointData, setCheckpointData] = useState({ amount: 0, date: '1970-01-01' });
+  
+  // --- STATE UI MODAL ---
   const [showModal, setShowModal] = useState(false);
   const [tempBrankasInput, setTempBrankasInput] = useState('');
+  const [tempBrankasDate, setTempBrankasDate] = useState('');
 
-  // STATE CHART FILTER
+  // --- STATE UI MOBILE STACK ---
+  const [isStatsExpanded, setIsStatsExpanded] = useState(false);
+
+  // --- STATE CHART ---
   const [chartFilter, setChartFilter] = useState('1week');
-  
-  // STATE PAGINATION
   const [visibleRecent, setVisibleRecent] = useState(3);
   const [visibleMissing, setVisibleMissing] = useState(3);
   const [visibleHistory, setVisibleHistory] = useState(3);
-
-  // DATA MAPS
   const [incomeMapData, setIncomeMapData] = useState({});
   const [otherMapData, setOtherMapData] = useState({});
   const [feeMapData, setFeeMapData] = useState({});
 
-  // STATE RESPONSIVE (PENGGANTI @MEDIA QUERY)
+  // --- RESPONSIVE ---
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
-
-  // LISTENER RESIZE (Agar chart berubah saat layar diputar/di-resize)
   useEffect(() => {
     const handleResize = () => setWindowWidth(window.innerWidth);
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // UTILS
+  // --- UTILS ---
   const isWeekend = () => { const day = new Date().getDay(); return day === 0 || day === 6; };
   const formatRupiah = (number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(number);
   const getTodayString = () => { const d = new Date(); const m = String(d.getMonth()+1).padStart(2,'0'); const day = String(d.getDate()).padStart(2,'0'); return `${d.getFullYear()}-${m}-${day}`; };
@@ -55,27 +55,28 @@ const Dashboard = () => {
   const formatDateIndo = (dateStr) => { if(!dateStr) return "-"; const d = new Date(dateStr); return d.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }); };
   const getInitials = (name) => name ? name.substring(0, 2).toUpperCase() : "US";
 
-  // LOGIC SIMPAN BRANKAS
-  const handleSaveBrankas = () => {
-    const val = parseInt(tempBrankasInput) || 0;
-    setTotalBrankas(val);
-    localStorage.setItem('savedTotalBrankas', val); 
-    setShowModal(false);
-  };
-
-  const openModal = () => {
-    setTempBrankasInput(totalBrankas); 
-    setShowModal(true);
-  }
-
-  // LOGIC REVENUE
+  // --- LOGIC TOTAL REVENUE ---
   const totalRevenue = totalBrankas - totalSavings;
 
-  // FETCH DATA
+  // --- FETCH DATA ---
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // 1. USERS
+        // 1. CHECKPOINT BRANKAS
+        const checkpointRef = doc(db, "settings", "brankas_checkpoint");
+        const checkpointSnap = await getDoc(checkpointRef);
+        
+        let cpAmount = 0;
+        let cpDate = '1970-01-01';
+
+        if (checkpointSnap.exists()) {
+            const data = checkpointSnap.data();
+            cpAmount = parseInt(data.amount) || 0;
+            cpDate = data.date || '1970-01-01';
+        }
+        setCheckpointData({ amount: cpAmount, date: cpDate });
+
+        // 2. USERS
         const usersSnap = await getDocs(collection(db, "users"));
         let allUsers = [];
         let uMap = {};
@@ -87,12 +88,14 @@ const Dashboard = () => {
         });
         setUserMap(uMap);
 
-        // 2. TRANSACTIONS
+        // 3. TRANSACTIONS
         const transRef = collection(db, "transactions");
         const qTrans = query(transRef, orderBy("date", "asc"));
         const transSnap = await getDocs(qTrans);
 
         let currentTotalSavings = 0;
+        let calculatedBrankas = cpAmount;
+
         let todayTrans = [];
         let paidUserIdsToday = new Set();
         let iMap = {}; let oMap = {}; 
@@ -103,11 +106,19 @@ const Dashboard = () => {
           const amount = parseInt(t.amount) || 0;
           const isOther = t.userId === 'other';
 
-          if (!isOther) {
+          // A. Savings Logic
+          if (!isOther && !t.skipSavings) {
               if(t.type === 'income') currentTotalSavings += amount;
               else if(t.type === 'expense') currentTotalSavings -= amount;
           }
 
+          // B. Brankas Logic (After Checkpoint)
+          if (t.date > cpDate) {
+              if (t.type === 'income') calculatedBrankas += amount;
+              else if (t.type === 'expense') calculatedBrankas -= amount;
+          }
+
+          // C. Data UI
           if (t.date === todayStr && t.type === 'income') {
              todayTrans.push(t);
              if(!isOther) paidUserIdsToday.add(t.userId);
@@ -120,7 +131,7 @@ const Dashboard = () => {
           }
         });
 
-        // 3. ATTENDANCE
+        // 4. SCHOOL FEE (ATTENDANCE)
         const attRef = collection(db, "attendance");
         const qAtt = query(attRef, orderBy("date", "desc"), limit(40)); 
         const attSnap = await getDocs(qAtt);
@@ -139,28 +150,54 @@ const Dashboard = () => {
         });
 
         setTotalSavings(currentTotalSavings);
+        setTotalBrankas(calculatedBrankas); 
         setRecentIncome(todayTrans.reverse());
         setTodayMissingUsers(allUsers.filter(u => !paidUserIdsToday.has(u.id)));
         setHistoryMissingIncome(missingHistoryList); 
         setIncomeMapData(iMap); setOtherMapData(oMap); setFeeMapData(fMap);
         setLoading(false);
-      } catch (error) { console.error(error); }
+
+      } catch (error) { console.error(error); toast.error("Error loading data"); }
     };
     fetchData();
-  }, []);
+  }, []); 
 
-  // CHART RENDER
-  // Tambahkan windowWidth ke dependency agar chart di-render ulang saat layar berubah
+  // --- SAVE BRANKAS ---
+  const handleSaveBrankas = async () => {
+    const val = parseInt(tempBrankasInput) || 0;
+    const date = tempBrankasDate || getTodayString();
+
+    try {
+        await setDoc(doc(db, "settings", "brankas_checkpoint"), {
+            amount: val,
+            date: date,
+            updatedAt: new Date()
+        });
+        setCheckpointData({ amount: val, date: date });
+        setTotalBrankas(val); 
+        toast.success("Brankas Checkpoint Updated!");
+        setShowModal(false);
+        setTimeout(() => window.location.reload(), 1000); 
+    } catch (error) {
+        console.error(error);
+        toast.error("Gagal menyimpan.");
+    }
+  };
+
+  const openModal = () => {
+    setTempBrankasInput(totalBrankas); 
+    setTempBrankasDate(getTodayString());
+    setShowModal(true);
+  }
+
+  // --- CHART RENDER ---
   useEffect(() => { if(!loading) renderChart(); }, [loading, chartFilter, incomeMapData, otherMapData, feeMapData, windowWidth]);
 
   const renderChart = () => {
     if (chartInstance.current) chartInstance.current.destroy();
     const ctx = chartRef.current.getContext('2d');
     const labels = []; const dataSavings = []; const dataFee = []; const dataOther = []; const dataTotal = [];
-
-    // DETEKSI MOBILE LOGIC
     const isMobile = windowWidth < 768;
-
     let daysToFetch = chartFilter === '1week' ? 5 : chartFilter === '2week' ? 10 : chartFilter === '3week' ? 15 : 20;
     let currentDate = new Date(); let count = 0;
 
@@ -192,77 +229,113 @@ const Dashboard = () => {
         },
         options: {
             responsive: true,
-            // LOGIC KUNCI: 
-            // Jika Mobile: maintainAspectRatio TRUE (agar bisa kita set kotak 1:1)
-            // Jika Desktop: maintainAspectRatio FALSE (agar dia mengikuti tinggi div 320px)
             maintainAspectRatio: isMobile ? true : false, 
-            aspectRatio: isMobile ? 1 : null, // Mobile = Kotak, Desktop = Null (mengikuti container)
+            aspectRatio: isMobile ? 1 : null,
             interaction: { mode: 'index', intersect: false },
             plugins: { legend: { display: true }, tooltip: { callbacks: { label: (ctx) => ctx.dataset.label + ': Rp ' + ctx.parsed.y.toLocaleString('id-ID') } } },
-            scales: { 
-                y: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { callback: (val) => (val/1000) + 'k' } }, 
-                x: { 
-                    grid: { display: false },
-                    // Di Mobile, batasi jumlah tick agar tidak menumpuk
-                    ticks: { maxTicksLimit: isMobile ? 5 : 10 }
-                } 
-            }
+            scales: { y: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { callback: (val) => (val/1000) + 'k' } }, x: { grid: { display: false }, ticks: { maxTicksLimit: isMobile ? 5 : 10 } } }
         }
     });
   };
 
-  // --- STYLE UNTUK KARTU (MIRIP GAMBAR UPLOAD) ---
-  const cardStyle = {
+  // --- LOGIKA ANIMASI & STYLING MOBILE ---
+  const isMobile = windowWidth < 768;
+  const CARD_HEIGHT = 140; 
+  const GAP = 20; 
+
+  // Container style untuk animasi tinggi
+  const gridContainerStyle = isMobile ? {
+      position: 'relative',
+      height: isStatsExpanded ? `${(CARD_HEIGHT + GAP) * 3}px` : '160px',
+      transition: 'height 0.5s cubic-bezier(0.4, 0, 0.2, 1)', 
+      marginBottom: '25px',
+      zIndex: 10
+  } : {
+      display: 'grid', 
+      gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', 
+      gap: '20px', 
+      marginBottom: '25px'
+  };
+
+  // Helper style per kartu untuk mobile
+  const getMobileCardStyle = (index) => {
+      if (!isMobile) return {}; 
+
+      const expandedTransform = `translateY(${index * (CARD_HEIGHT + GAP)}px)`;
+      const collapsedTransform = `translateY(${index * 12}px) scale(${1 - (index * 0.05)})`;
+
+      return {
+          position: 'absolute',
+          top: 0, 
+          left: 0, 
+          width: '100%',
+          height: `${CARD_HEIGHT}px`, 
+          transition: 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)', 
+          transform: isStatsExpanded ? expandedTransform : collapsedTransform,
+          zIndex: isStatsExpanded ? 1 : (3 - index), 
+          opacity: isStatsExpanded ? 1 : (index === 0 ? 1 : 0.9), 
+          boxShadow: !isStatsExpanded && index === 0 ? '0 4px 15px rgba(0,0,0,0.1)' : '0 4px 6px -1px rgba(0,0,0,0.1)'
+      };
+  };
+
+  // --- SHARED CARD STYLE ---
+  const cardBaseStyle = {
     background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)', 
     color: 'white',
     borderRadius: '12px',
     padding: '24px',
-    position: 'relative',
     overflow: 'hidden',
     boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.3)',
     display: 'flex',
     flexDirection: 'column',
     justifyContent: 'space-between',
-    minHeight: '140px'
+    minHeight: `${CARD_HEIGHT}px`,
+    cursor: isMobile ? 'pointer' : 'default' 
   };
 
   const iconBoxStyle = {
-      position: 'absolute',
-      right: '20px',
-      top: '50%',
-      transform: 'translateY(-50%)',
-      width: '48px',
-      height: '48px',
-      backgroundColor: 'rgba(255, 255, 255, 0.2)',
-      borderRadius: '12px',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      fontSize: '20px'
+      position: 'absolute', right: '20px', top: '50%', transform: 'translateY(-50%)',
+      width: '48px', height: '48px', backgroundColor: 'rgba(255, 255, 255, 0.2)',
+      borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px'
   };
 
   return (
     <div style={{width: '100%'}}> 
       
-      {/* MODAL INPUT */}
+      {/* MODAL INPUT BRANKAS */}
       {showModal && (
         <div style={{
             position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
             backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999
         }}>
             <div style={{backgroundColor: 'white', padding: '24px', borderRadius: '16px', width: '320px', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'}}>
-                <h3 style={{marginTop: 0, marginBottom: '16px', color: '#1e293b', fontSize: '18px', fontWeight: '600'}}>Update Brankas</h3>
-                <label style={{display:'block', marginBottom:'8px', fontSize:'13px', color:'#64748b', fontWeight:'500'}}>Total Uang Fisik</label>
-                <div style={{position:'relative', marginBottom: '20px'}}>
+                <h3 style={{marginTop: 0, marginBottom: '16px', color: '#1e293b', fontSize: '18px', fontWeight: '600'}}>Checkpoint Brankas</h3>
+                
+                <label style={{display:'block', marginBottom:'5px', fontSize:'13px', color:'#64748b'}}>Total Fisik (Opname)</label>
+                <div style={{position:'relative', marginBottom: '15px'}}>
                     <span style={{position:'absolute', left:'12px', top:'11px', color:'#94a3b8', fontSize:'14px'}}>Rp</span>
                     <input 
                         type="number" 
                         value={tempBrankasInput} 
                         onChange={(e) => setTempBrankasInput(e.target.value)}
-                        style={{width: '100%', padding: '10px 10px 10px 35px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '16px', outlineColor: '#2563eb', boxSizing:'border-box'}}
+                        style={{width: '100%', padding: '10px 10px 10px 35px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '16px', boxSizing:'border-box'}}
                         placeholder="0"
                     />
                 </div>
+
+                <label style={{display:'block', marginBottom:'5px', fontSize:'13px', color:'#64748b'}}>Tanggal Opname</label>
+                <input 
+                    type="date" 
+                    value={tempBrankasDate} 
+                    onChange={(e) => setTempBrankasDate(e.target.value)}
+                    style={{width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '16px', marginBottom: '20px', boxSizing:'border-box'}}
+                />
+                
+                <div style={{fontSize:'11px', color:'#ef4444', marginBottom:'20px', lineHeight:'1.4'}}>
+                    <i className="fa-solid fa-circle-info" style={{marginRight:'4px'}}></i>
+                    Sistem akan mengakumulasi transaksi mulai dari hari setelah tanggal ini.
+                </div>
+
                 <div style={{display: 'flex', gap: '10px', justifyContent: 'flex-end'}}>
                     <button onClick={() => setShowModal(false)} style={{padding: '10px 16px', borderRadius: '8px', border: 'none', background: '#f1f5f9', color: '#64748b', cursor: 'pointer', fontWeight:'500'}}>Cancel</button>
                     <button onClick={handleSaveBrankas} style={{padding: '10px 16px', borderRadius: '8px', border: 'none', background: '#2563eb', color: 'white', cursor: 'pointer', fontWeight:'500'}}>Save</button>
@@ -271,18 +344,74 @@ const Dashboard = () => {
         </div>
       )}
 
+      {/* --- HEADER SECTION DENGAN PERBAIKAN Z-INDEX DAN PADDING --- */}
       <div className="header-section">
         <div className="page-title-wrapper" style={{display:'flex', alignItems:'center'}}>
-           <button className="mobile-toggle-btn" onClick={toggleSidebar}><i className="fa-solid fa-bars"></i></button>
-           <div className="page-title"><h1>Dashboard</h1><p>Overview of school finance</p></div>
+           {/* BUTTON FIXED & PERSEGI (ROUNDED 8px) */}
+          <button 
+              className="mobile-toggle-btn floating-menu-btn" // Tambahkan class floating-menu-btn
+              onClick={toggleSidebar}
+              style={{
+                  position: 'fixed', 
+                  top: '20px',       
+                  left: '20px',      
+                  zIndex: 9999,      
+                  background: 'white', 
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '8px',
+                  width: '40px',
+                  height: '40px',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 4px 6px rgba(0,0,0,0.1)', 
+                  cursor: 'pointer',
+                  // HAPUS baris 'display' dari sini
+              }}
+          >
+              <i className="fa-solid fa-bars" style={{color: '#334155', fontSize: '16px'}}></i>
+          </button>
+
+           <div className="page-title" style={{ marginLeft: windowWidth < 768 ? '50px' : '0' }}>
+               <h1>Dashboard</h1>
+               <p>Overview of school finance</p>
+           </div>
         </div>
       </div>
 
-      {/* --- STAT CARDS GRID --- */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px', marginBottom: '25px' }}>
+      {/* --- STAT CARDS CONTAINER --- */}
+      <div 
+        style={gridContainerStyle} 
+        onClick={() => isMobile && setIsStatsExpanded(!isStatsExpanded)} // Klik container untuk animasi
+      >
           
-          {/* CARD 1: TOTAL SAVINGS */}
-          <div style={cardStyle}>
+          {/* CARD 1: BRANKAS (PALING ATAS = INDEX 0) */}
+          <div style={{ ...cardBaseStyle, ...getMobileCardStyle(0) }}>
+              <div>
+                  <div style={{fontSize: '13px', opacity: 0.9, marginBottom: '8px', display:'flex', alignItems:'center', gap:'6px'}}>
+                      <i className="fa-solid fa-vault"></i> Brankas / Deposit Box
+                  </div>
+                  <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
+                    <div style={{fontSize: '28px', fontWeight: '700', letterSpacing: '-0.5px'}}>
+                        {formatRupiah(totalBrankas)}
+                    </div>
+                    {/* StopPropagation agar klik tombol edit tidak menutup/membuka stack */}
+                    <button onClick={(e) => { e.stopPropagation(); openModal(); }} style={{
+                        background:'rgba(255,255,255,0.2)', border:'none', color:'white', 
+                        width:'32px', height:'32px', borderRadius:'8px', cursor:'pointer',
+                        display:'flex', alignItems:'center', justifyContent:'center', transition: 'background 0.2s', zIndex: 20
+                    }}>
+                        <i className="fa-solid fa-pen" style={{fontSize:'12px'}}></i>
+                    </button>
+                  </div>
+              </div>
+              <div style={{fontSize: '11px', opacity: 0.8, marginTop: '12px'}}>
+                  <i className="fa-solid fa-money-bill-wave" style={{marginRight:'4px'}}></i> Total physical cash available
+              </div>
+              <div style={iconBoxStyle}><i className="fa-solid fa-lock"></i></div>
+          </div>
+
+          {/* CARD 2: SAVINGS (INDEX 1) */}
+          <div style={{ ...cardBaseStyle, ...getMobileCardStyle(1) }}>
               <div>
                   <div style={{fontSize: '13px', opacity: 0.9, marginBottom: '8px', display:'flex', alignItems:'center', gap:'6px'}}>
                       <i className="fa-solid fa-piggy-bank"></i> Total Students Savings
@@ -297,33 +426,13 @@ const Dashboard = () => {
               <div style={iconBoxStyle}><i className="fa-solid fa-wallet"></i></div>
           </div>
 
-          {/* CARD 2: BRANKAS */}
-          <div style={cardStyle}>
-              <div>
-                  <div style={{fontSize: '13px', opacity: 0.9, marginBottom: '8px', display:'flex', alignItems:'center', gap:'6px'}}>
-                      <i className="fa-solid fa-vault"></i> Brankas / Deposit Box
-                  </div>
-                  <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
-                    <div style={{fontSize: '28px', fontWeight: '700', letterSpacing: '-0.5px'}}>
-                        {formatRupiah(totalBrankas)}
-                    </div>
-                    <button onClick={openModal} style={{
-                        background:'rgba(255,255,255,0.2)', border:'none', color:'white', 
-                        width:'32px', height:'32px', borderRadius:'8px', cursor:'pointer',
-                        display:'flex', alignItems:'center', justifyContent:'center', transition: 'background 0.2s'
-                    }}>
-                        <i className="fa-solid fa-pen" style={{fontSize:'12px'}}></i>
-                    </button>
-                  </div>
-              </div>
-              <div style={{fontSize: '11px', opacity: 0.8, marginTop: '12px'}}>
-                  <i className="fa-solid fa-money-bill-wave" style={{marginRight:'4px'}}></i> Total physical cash available
-              </div>
-              <div style={iconBoxStyle}><i className="fa-solid fa-lock"></i></div>
-          </div>
-
-          {/* CARD 3: REVENUE */}
-          <div style={{...cardStyle, background: 'linear-gradient(135deg, #059669 0%, #047857 100%)', boxShadow: '0 4px 6px -1px rgba(5, 150, 105, 0.3)'}}>
+          {/* CARD 3: REVENUE (INDEX 2) */}
+          <div style={{ 
+              ...cardBaseStyle, 
+              background: 'linear-gradient(135deg, #059669 0%, #047857 100%)', 
+              boxShadow: '0 4px 6px -1px rgba(5, 150, 105, 0.3)',
+              ...getMobileCardStyle(2) 
+          }}>
               <div>
                   <div style={{fontSize: '13px', opacity: 0.9, marginBottom: '8px', display:'flex', alignItems:'center', gap:'6px'}}>
                       <i className="fa-solid fa-chart-line"></i> Total Revenue
@@ -353,14 +462,7 @@ const Dashboard = () => {
               </div>
           </div>
           
-          {/* DIV CONTAINER CHART DENGAN LOGIC MEDIA QUERY JS */}
-          <div style={{ 
-              // JIKA LAYAR < 768 (MOBILE): Height AUTO agar bisa memanjang sesuai aspek rasio.
-              // JIKA LAYAR >= 768 (DESKTOP): Height 320px (sesuai request Anda agar desktop tidak rusak).
-              height: windowWidth < 768 ? 'auto' : '320px', 
-              width: '100%', 
-              position: 'relative' 
-          }}>
+          <div style={{ height: windowWidth < 768 ? 'auto' : '320px', width: '100%', position: 'relative' }}>
               <canvas ref={chartRef}></canvas>
           </div>
       </div>

@@ -19,6 +19,7 @@ const Absensi = () => {
   const [isSaving, setIsSaving] = useState(false);
 
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  const isMobile = windowWidth < 768;
 
 
   // --- MODIFIKASI STATUS CONFIG ---
@@ -31,13 +32,20 @@ const Absensi = () => {
     'A': { label: 'A', color: '#991b1b', bg: '#fee2e2', title: 'Alpha' },
   };
 
+  // --- 2. TAMBAHKAN USE EFFECT INI ---
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // 1. GENERATE 7 HARI (SKIP SABTU MINGGU)
   useEffect(() => {
     const dates = [];
     let currentDate = new Date(selectedDate);
 
     // MOBILE = 5 hari | DESKTOP = 7 hari
-    const maxDays = windowWidth < 768 ? 5 : 7;
+    const maxDays = windowWidth < 768 ? 6 : 7;
 
     let count = 0;
     while (count < maxDays) {
@@ -202,8 +210,29 @@ const Absensi = () => {
     <div style={{ width: '100%' }}>
       <div className="header-section">
         <div className="page-title-wrapper" style={{ display: 'flex', alignItems: 'center' }}>
-          <button className="mobile-toggle-btn" onClick={toggleSidebar}><i className="fa-solid fa-bars"></i></button>
-          <div className="page-title">
+          <button 
+              className="mobile-toggle-btn floating-menu-btn" // Tambahkan class floating-menu-btn
+              onClick={toggleSidebar}
+              style={{
+                  position: 'fixed', 
+                  top: '20px',       
+                  left: '20px',      
+                  zIndex: 9999,      
+                  background: 'white', 
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '8px',
+                  width: '40px',
+                  height: '40px',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 4px 6px rgba(0,0,0,0.1)', 
+                  cursor: 'pointer',
+                  // HAPUS baris 'display' dari sini
+              }}
+          >
+              <i className="fa-solid fa-bars" style={{color: '#334155', fontSize: '16px'}}></i>
+          </button>
+          <div className="page-title" style={{ marginLeft: windowWidth < 768 ? '50px' : '0' }}>
             <h1>Absensi Matriks</h1>
             <p>Rekap kehadiran 7 hari terakhir</p>
           </div>

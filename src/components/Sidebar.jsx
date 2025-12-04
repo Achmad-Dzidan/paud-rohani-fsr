@@ -1,17 +1,27 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 
 const Sidebar = ({ isOpen, toggleSidebar }) => {
   const navigate = useNavigate();
 
+  // --- 1. PINDAHKAN STATE WINDOW WIDTH KE DALAM KOMPONEN ---
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+
+  // --- 2. PINDAHKAN USE EFFECT KE DALAM KOMPONEN ---
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   const handleLogout = () => {
     navigate('/'); 
   };
 
-  // --- FUNGSI BARU: Tutup sidebar saat link diklik ---
+  // --- FUNGSI: Tutup sidebar saat link diklik (Khusus Mobile) ---
   const handleLinkClick = () => {
-    // Hanya jalankan toggle jika sidebar sedang terbuka (artinya sedang di mobile)
-    if (isOpen) {
+    // Cek jika di mobile (lebar < 768) dan sidebar sedang terbuka
+    if (windowWidth < 768 && isOpen) {
       toggleSidebar();
     }
   };
@@ -30,7 +40,8 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
           <i className="fa-solid fa-xmark"></i>
         </button>
 
-        <div className="brand">
+        {/* LOGIKA MARGIN BERDASARKAN WINDOW WIDTH */}
+        <div className="brand" style={{ marginTop: windowWidth < 768 ? '50px' : '0' }}>
           <h2>PAUD Finance</h2>
           <p>Admin Portal</p>
         </div>
@@ -40,7 +51,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
             <NavLink 
               to="/dashboard" 
               className={({ isActive }) => `menu-item ${isActive ? 'active' : ''}`}
-              onClick={handleLinkClick} // <--- Tambahkan di sini
+              onClick={handleLinkClick} 
             >
               <i className="fa-solid fa-border-all"></i> Dashboard
             </NavLink>
@@ -49,7 +60,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
             <NavLink 
               to="/income" 
               className={({ isActive }) => `menu-item ${isActive ? 'active' : ''}`}
-              onClick={handleLinkClick} // <--- Tambahkan di sini
+              onClick={handleLinkClick} 
             >
               <i className="fa-solid fa-dollar-sign"></i> Balance Mgt.
             </NavLink>
@@ -58,7 +69,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
             <NavLink 
               to="/daily-income" 
               className={({ isActive }) => `menu-item ${isActive ? 'active' : ''}`}
-              onClick={handleLinkClick} // <--- Tambahkan di sini
+              onClick={handleLinkClick} 
             >
               <i className="fa-solid fa-calendar-days"></i> Daily Income
             </NavLink>
@@ -67,7 +78,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
             <NavLink 
               to="/savings" 
               className={({ isActive }) => `menu-item ${isActive ? 'active' : ''}`}
-              onClick={handleLinkClick} // <--- Tambahkan di sini
+              onClick={handleLinkClick} 
             >
               <i className="fa-solid fa-piggy-bank"></i> Student Savings
             </NavLink>
@@ -76,38 +87,20 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
             <NavLink 
               to="/absensi" 
               className={({ isActive }) => `menu-item ${isActive ? 'active' : ''}`}
-              onClick={handleLinkClick} // <--- Tambahkan di sini
+              onClick={handleLinkClick} 
             >
-              <i class="fa-solid fa-user-check"></i> Absensi
+              <i className="fa-solid fa-user-check"></i> Absensi
             </NavLink>
           </li>
           <li>
             <NavLink 
               to="/users" 
               className={({ isActive }) => `menu-item ${isActive ? 'active' : ''}`}
-              onClick={handleLinkClick} // <--- Tambahkan di sini
-            >
-              <i class="fa-solid fa-users"></i> User Management
-            </NavLink>
-          </li>
-          {/* <li>
-            <NavLink 
-              to="/event-transaction" 
-              className={({ isActive }) => `menu-item ${isActive ? 'active' : ''}`}
               onClick={handleLinkClick} 
             >
-              <i className="fa-solid fa-calendar-check"></i> Eventual Transaction
+              <i className="fa-solid fa-users"></i> User Management
             </NavLink>
           </li>
-          <li>
-            <NavLink 
-              to="/other-transaction" 
-              className={({ isActive }) => `menu-item ${isActive ? 'active' : ''}`}
-              onClick={handleLinkClick} 
-            >
-              <i className="fa-solid fa-cash-register"></i> Other Transaction
-            </NavLink>
-          </li> */}
         </ul>
         
         {/* Tombol Logout */}

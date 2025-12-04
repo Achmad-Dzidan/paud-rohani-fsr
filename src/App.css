@@ -642,3 +642,15 @@ input[type="number"]::-webkit-inner-spin-button {
 input[type="number"] {
   -moz-appearance: textfield;
 }
+
+/* Default: Sembunyikan di Desktop */
+.floating-menu-btn {
+  display: none !important; 
+}
+
+/* Tampilkan hanya di Mobile (layar < 768px) */
+@media (max-width: 768px) {
+  .floating-menu-btn {
+    display: flex !important;
+  }
+}
