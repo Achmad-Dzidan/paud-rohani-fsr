@@ -5,12 +5,12 @@ import react from '@vitejs/plugin-react'
 export default defineConfig(({ command }) => {
   const config = {
     plugins: [react()],
-    base: '/',
-  }
+  //   base: '/',
+  // }
 
-  if (command !== 'serve') {
-    // PERHATIKAN SLASH DI DEPAN DAN BELAKANG
-    config.base = '/paud-rohani-fsr/' 
+  // if (command !== 'serve') {
+  //   // PERHATIKAN SLASH DI DEPAN DAN BELAKANG
+  //   config.base = '/paud-rohani-fsr/' 
   }
 
   return config

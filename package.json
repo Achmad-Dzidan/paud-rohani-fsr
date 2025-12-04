@@ -2,7 +2,6 @@
   "name": "paud-finance",
   "private": true,
   "version": "0.0.0",
-  "homepage": "https://github.com/Achmad-Dzidan/paud-rohani-fsr",
   "type": "module",
   "scripts": {
     "dev": "vite",
