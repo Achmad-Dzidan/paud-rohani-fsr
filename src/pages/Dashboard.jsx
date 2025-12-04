@@ -450,7 +450,7 @@ const Dashboard = () => {
       </div>
       {/* --- END STAT CARDS --- */}
 
-      <div className="chart-section" style={{ height: windowWidth < 768 ? '420px' : '400px', width: '100%', minWidth: 0 }}> 
+      <div className="chart-section" style={{ height: 'auto', minHeight: windowWidth < 768 ? 'auto' : '400px', width: '100%', minWidth: 0, paddingBottom: '20px'    }}> 
           <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'15px', flexWrap:'wrap', gap:'10px'}}>
               <h3 className="section-title" style={{margin:0}}>Daily Revenue</h3>
               <div style={{display:'flex', gap:'5px', background:'#f1f5f9', padding:'4px', borderRadius:'8px'}}>
