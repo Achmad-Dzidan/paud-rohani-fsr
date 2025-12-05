@@ -1,48 +1,55 @@
 import React, { useState } from 'react';
 import { Toaster, toast } from 'sonner';
-import { useNavigate } from 'react-router-dom'; // 1. IMPORT NAVIGATE
+import { useNavigate } from 'react-router-dom';
 import './App.css'; 
 
-// Import fungsi Firebase
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
+// 1. IMPORT FUNGSI PERSISTENCE DARI FIREBASE
+import { 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword,
+  setPersistence, 
+  browserLocalPersistence, 
+  browserSessionPersistence 
+} from 'firebase/auth';
 import { auth } from './firebase'; 
 
-function Login() { // Ubah nama function jadi Login agar rapi
-  const navigate = useNavigate(); // 2. INISIALISASI NAVIGATE
+function Login() { 
+  const navigate = useNavigate();
   
   const [isLoginMode, setIsLoginMode] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  
+  // 2. STATE UNTUK CHECKBOX REMEMBER ME
+  const [rememberMe, setRememberMe] = useState(false); 
   const [loading, setLoading] = useState(false);
 
   const handleAuth = async (e) => {
     e.preventDefault();
     setLoading(true);
 
-    // 1. CEK IMPORT & MODE
-    console.log("=== MULAI PROSES AUTH ===");
-    console.log("Mode:", isLoginMode ? "LOGIN" : "REGISTER");
-    console.log("Tipe Fungsi Login:", typeof signInWithEmailAndPassword); // Harus 'function'
-
-    // 2. CEK NILAI INPUT (Penting!)
-    console.log("Email yang dikirim:", email);
-    console.log("Password yang dikirim:", password);
-
-    // Cek apakah ada yang kosong/spasi
     if (!email || !password) {
-      toast.error("Email atau Password kosong/tidak terbaca!");
+      toast.error("Email atau Password kosong!");
       setLoading(false);
       return;
     }
 
     try {
       if (isLoginMode) {
-        console.log(">> Mengeksekusi signInWithEmailAndPassword...");
+        console.log(">> Mengatur Persistence...");
         
-        // --- INI BARIS KRUSIAL ---
+        // 3. LOGIKA PERSISTENCE (KUNCI UTAMA)
+        // Jika dicentang -> Local (Tetap login walau browser tutup)
+        // Jika tidak -> Session (Logout saat tab ditutup)
+        const persistenceType = rememberMe ? browserLocalPersistence : browserSessionPersistence;
+        
+        // Set persistence DULU sebelum sign in
+        await setPersistence(auth, persistenceType);
+
+        console.log(">> Mengeksekusi signInWithEmailAndPassword...");
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         
-        console.log(">> HASIL LOGIN:", userCredential); // Jika muncul ini, berarti berhasil
+        console.log(">> HASIL LOGIN:", userCredential);
         toast.success('Login Berhasil! Mengalihkan...');
         
         setTimeout(() => {
@@ -51,20 +58,26 @@ function Login() { // Ubah nama function jadi Login agar rapi
 
       } else {
         console.log(">> Mengeksekusi Register...");
+        // Register biasanya default local, tapi bisa diatur juga jika mau
         await createUserWithEmailAndPassword(auth, email, password);
         toast.success('Registrasi Berhasil! Silahkan login.');
         setIsLoginMode(true);
       }
     } catch (error) {
-      // 3. TANGKAP ERROR KLIEN (Sebelum ke Network)
-      console.error("!!! TERJADI ERROR !!!");
       console.error("Code:", error.code);
       console.error("Message:", error.message);
       
-      toast.error(`Gagal: ${error.code}`);
+      // Error handling yang lebih rapi
+      let errorMessage = "Terjadi kesalahan.";
+      if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found') {
+        errorMessage = "Email atau password salah.";
+      } else if (error.code === 'auth/too-many-requests') {
+        errorMessage = "Terlalu banyak percobaan. Coba lagi nanti.";
+      }
+      
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
-      console.log("=== SELESAI ===");
     }
   };
 
@@ -114,21 +127,29 @@ function Login() { // Ubah nama function jadi Login agar rapi
             </div>
           </div>
 
-          <button type="submit" className="btn-primary" disabled={loading}>
+          {/* 4. UI CHECKBOX REMEMBER ME */}
+          {isLoginMode && (
+            <div className="form-group checkbox-group" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px' }}>
+              <input 
+                type="checkbox" 
+                id="rememberMe" 
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                style={{ width: 'auto', cursor: 'pointer' }}
+              />
+              <label htmlFor="rememberMe" style={{ fontSize: '14px', cursor: 'pointer', color: '#555', userSelect: 'none' }}>
+                Tetap login di perangkat ini
+              </label>
+            </div>
+          )}
+
+          <button type="submit" className="btn-primary" disabled={loading} style={{ marginTop: '20px' }}>
             {loading ? 'Loading...' : (isLoginMode ? 'Login' : 'Register')}
           </button>
         </form>
 
-        <button
-          type="button" 
-          className="btn-secondary"
-          onClick={() => {
-            toast.success('This is a success toast');
-          }}
-        >
-          Render toast
-        </button>
-
+        {/* Tombol render toast dihapus saja jika tidak dipakai untuk produksi */}
+        
         <div className="info-box">
           For <b>private</b> access
         </div>

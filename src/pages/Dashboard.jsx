@@ -94,7 +94,7 @@ const Dashboard = () => {
         const transSnap = await getDocs(qTrans);
 
         let currentTotalSavings = 0;
-        let calculatedBrankas = cpAmount;
+        let calculatedBrankas = cpAmount; // Start dengan nilai Opname
 
         let todayTrans = [];
         let paidUserIdsToday = new Set();
@@ -112,7 +112,7 @@ const Dashboard = () => {
               else if(t.type === 'expense') currentTotalSavings -= amount;
           }
 
-          // B. Brankas Logic (After Checkpoint)
+          // B. Brankas Logic (TRANSAKSI) - Hanya hitung jika tanggal > tanggal opname
           if (t.date > cpDate) {
               if (t.type === 'income') calculatedBrankas += amount;
               else if (t.type === 'expense') calculatedBrankas -= amount;
@@ -133,7 +133,8 @@ const Dashboard = () => {
 
         // 4. SCHOOL FEE (ATTENDANCE)
         const attRef = collection(db, "attendance");
-        const qAtt = query(attRef, orderBy("date", "desc"), limit(40)); 
+        // HAPUS limit(40) agar perhitungan Brankas akurat dari tanggal opname terakhir
+        const qAtt = query(attRef, orderBy("date", "desc")); 
         const attSnap = await getDocs(qAtt);
         let missingHistoryList = [];
         let fMap = {};
@@ -142,11 +143,25 @@ const Dashboard = () => {
             const date = doc.id; 
             const records = doc.data().records || {};
             let hCount = 0;
+            
             Object.entries(records).forEach(([userId, status]) => {
-                if (status === '?') missingHistoryList.push({ userId, date, name: uMap[userId]?.nickname || uMap[userId]?.name || "Unknown" });
+                if (status === '?') {
+                    // Hanya masukan ke list missing history jika belum terlalu lama (optional limit visual)
+                    if (missingHistoryList.length < 50) { 
+                        missingHistoryList.push({ userId, date, name: uMap[userId]?.nickname || uMap[userId]?.name || "Unknown" });
+                    }
+                }
                 if (status === 'H') hCount++;
             });
-            fMap[date] = hCount * 6000;
+
+            const dailyFee = hCount * 6000;
+            fMap[date] = dailyFee;
+
+            // --- LOGIKA BARU: SCHOOL FEE MASUK BRANKAS ---
+            // Hanya tambahkan fee ke brankas jika tanggal absen > tanggal opname
+            if (date > cpDate) {
+                calculatedBrankas += dailyFee;
+            }
         });
 
         setTotalSavings(currentTotalSavings);
@@ -243,7 +258,6 @@ const Dashboard = () => {
   const CARD_HEIGHT = 140; 
   const GAP = 20; 
 
-  // Container style untuk animasi tinggi
   const gridContainerStyle = isMobile ? {
       position: 'relative',
       height: isStatsExpanded ? `${(CARD_HEIGHT + GAP) * 3}px` : '160px',
@@ -257,7 +271,6 @@ const Dashboard = () => {
       marginBottom: '25px'
   };
 
-  // Helper style per kartu untuk mobile
   const getMobileCardStyle = (index) => {
       if (!isMobile) return {}; 
 
@@ -278,7 +291,6 @@ const Dashboard = () => {
       };
   };
 
-  // --- SHARED CARD STYLE ---
   const cardBaseStyle = {
     background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)', 
     color: 'white',
@@ -302,7 +314,6 @@ const Dashboard = () => {
   return (
     <div style={{width: '100%'}}> 
       
-      {/* MODAL INPUT BRANKAS */}
       {showModal && (
         <div style={{
             position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
@@ -344,32 +355,30 @@ const Dashboard = () => {
         </div>
       )}
 
-      {/* --- HEADER SECTION DENGAN PERBAIKAN Z-INDEX DAN PADDING --- */}
       <div className="header-section">
         <div className="page-title-wrapper" style={{display:'flex', alignItems:'center'}}>
-           {/* BUTTON FIXED & PERSEGI (ROUNDED 8px) */}
-          <button 
-              className="mobile-toggle-btn floating-menu-btn" // Tambahkan class floating-menu-btn
-              onClick={toggleSidebar}
-              style={{
-                  position: 'fixed', 
-                  top: '20px',       
-                  left: '20px',      
-                  zIndex: 9999,      
-                  background: 'white', 
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '8px',
-                  width: '40px',
-                  height: '40px',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  boxShadow: '0 4px 6px rgba(0,0,0,0.1)', 
-                  cursor: 'pointer',
-                  // HAPUS baris 'display' dari sini
-              }}
-          >
-              <i className="fa-solid fa-bars" style={{color: '#334155', fontSize: '16px'}}></i>
-          </button>
+           <button 
+                className="mobile-toggle-btn floating-menu-btn" 
+                onClick={toggleSidebar}
+                style={{
+                    position: 'fixed', 
+                    top: '20px',       
+                    left: '20px',      
+                    zIndex: 9999,      
+                    background: 'white', 
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '8px',
+                    width: '40px',
+                    height: '40px',
+                    display: windowWidth < 768 ? 'flex' : 'none', 
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 4px 6px rgba(0,0,0,0.1)', 
+                    cursor: 'pointer'
+                }}
+            >
+                <i className="fa-solid fa-bars" style={{color: '#334155', fontSize: '16px'}}></i>
+            </button>
 
            <div className="page-title" style={{ marginLeft: windowWidth < 768 ? '50px' : '0' }}>
                <h1>Dashboard</h1>
@@ -378,13 +387,12 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* --- STAT CARDS CONTAINER --- */}
       <div 
         style={gridContainerStyle} 
-        onClick={() => isMobile && setIsStatsExpanded(!isStatsExpanded)} // Klik container untuk animasi
+        onClick={() => isMobile && setIsStatsExpanded(!isStatsExpanded)}
       >
           
-          {/* CARD 1: BRANKAS (PALING ATAS = INDEX 0) */}
+          {/* CARD 1: BRANKAS (INDEX 0) */}
           <div style={{ ...cardBaseStyle, ...getMobileCardStyle(0) }}>
               <div>
                   <div style={{fontSize: '13px', opacity: 0.9, marginBottom: '8px', display:'flex', alignItems:'center', gap:'6px'}}>
@@ -394,7 +402,6 @@ const Dashboard = () => {
                     <div style={{fontSize: '28px', fontWeight: '700', letterSpacing: '-0.5px'}}>
                         {formatRupiah(totalBrankas)}
                     </div>
-                    {/* StopPropagation agar klik tombol edit tidak menutup/membuka stack */}
                     <button onClick={(e) => { e.stopPropagation(); openModal(); }} style={{
                         background:'rgba(255,255,255,0.2)', border:'none', color:'white', 
                         width:'32px', height:'32px', borderRadius:'8px', cursor:'pointer',
@@ -448,9 +455,8 @@ const Dashboard = () => {
           </div>
 
       </div>
-      {/* --- END STAT CARDS --- */}
 
-      <div className="chart-section" style={{ height: 'auto', minHeight: windowWidth < 768 ? 'auto' : '400px', width: '100%', minWidth: 0, paddingBottom: '20px'    }}> 
+      <div className="chart-section" style={{ height: windowWidth < 768 ? '420px' : '400px', width: '100%', minWidth: 0 }}> 
           <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'15px', flexWrap:'wrap', gap:'10px'}}>
               <h3 className="section-title" style={{margin:0}}>Daily Revenue</h3>
               <div style={{display:'flex', gap:'5px', background:'#f1f5f9', padding:'4px', borderRadius:'8px'}}>
@@ -469,7 +475,6 @@ const Dashboard = () => {
 
       <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
           
-          {/* 1. Recent Income */}
           <div className="list-box">
               <h3 className="section-title">Recent Income (Today)</h3>
               {loading ? <p style={{color:'#9ca3af', fontSize:'13px'}}>Loading...</p> : (
@@ -513,7 +518,6 @@ const Dashboard = () => {
               )}
           </div>
 
-          {/* 2. No Income */}
           <div className="list-box">
               <h3 className="section-title"><i className="fa-regular fa-user"></i> No Income (Today)</h3>
                {loading ? <p style={{color:'#9ca3af', fontSize:'13px'}}>Checking...</p> : (
@@ -550,7 +554,6 @@ const Dashboard = () => {
                )}
           </div>
 
-          {/* 3. Unpaid History */}
           <div className="list-box">
               <h3 className="section-title" style={{color:'#d97706'}}><i className="fa-solid fa-triangle-exclamation"></i> Unpaid Attendance</h3>
               {loading ? <p style={{color:'#9ca3af', fontSize:'13px'}}>Checking...</p> : (

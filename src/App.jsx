@@ -15,12 +15,15 @@ import StudentSavings from './pages/StudentSavings';
 // const Income = () => <h1>Income Page</h1>;
 // const Users = () => <h1>Users Page</h1>;
 
+import ProtectedRoute from './components/ProtectedRoute'; 
+
 function App() {
   return (
     <Router>
       <Routes>
         {/* Halaman Login (Tanpa Sidebar) */}
         <Route path="/" element={<Login />} />
+        <Route element={<ProtectedRoute />}>
 
         {/* Halaman Admin (Dengan Sidebar & Sonner Persistent) */}
         <Route element={<Layout />}>
@@ -32,6 +35,7 @@ function App() {
           <Route path="/absensi" element={<Absensi />} />
           {/* <Route path="/other-transaction" element={<OtherTransaction />} />
           <Route path="/event-transaction" element={<EventTransactions />} /> */}
+          </Route>
         </Route>
       </Routes>
     </Router>
