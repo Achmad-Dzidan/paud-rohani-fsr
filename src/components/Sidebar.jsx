@@ -110,6 +110,15 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
               <i className="fa-solid fa-users"></i> Account Management
             </NavLink>
           </li>
+          <li>
+            <NavLink 
+              to="/raport" 
+              className={({ isActive }) => `menu-item ${isActive ? 'active' : ''}`}
+              onClick={handleLinkClick} 
+            >
+              <i className="fa-solid fa-clipboard-list"></i> Form Raport
+            </NavLink>
+          </li>
         </ul>
         
         {/* Tombol Logout */}

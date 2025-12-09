@@ -45,7 +45,7 @@ const Absensi = () => {
     let currentDate = new Date(selectedDate);
 
     // MOBILE = 5 hari | DESKTOP = 7 hari
-    const maxDays = windowWidth < 768 ? 6 : 7;
+    const maxDays = windowWidth < 768 ? 7 : 7;
 
     let count = 0;
     while (count < maxDays) {

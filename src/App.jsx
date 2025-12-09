@@ -11,7 +11,8 @@ import Absensi from './pages/Absensi';
 import DailyIncome from './pages/DailyIncome';
 import StudentSavings from './pages/StudentSavings';
 import ProtectedRoute from './components/ProtectedRoute'; 
-import Account from './pages/Account'; // Ganti Users jadi Account
+import Account from './pages/Account'; 
+import RaportForm from './pages/RaportForm';
 
 function App() {
   return (
@@ -32,6 +33,7 @@ function App() {
             <Route path="/users" element={<Users />} />
             <Route path="/absensi" element={<Absensi />} />
             <Route path="/account" element={<Account />} />
+            <Route path="/raport" element={<RaportForm />} />
           </Route>
         </Route>
       </Routes>
