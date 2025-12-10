@@ -73,7 +73,7 @@ function Login() {
             
             // Redirect sesuai role (Opsional, atau semua ke dashboard)
             if (userData.role === 'teacher') {
-                setTimeout(() => navigate('/raport'), 1000); // Guru langsung ke raport
+                setTimeout(() => navigate('/users'), 1000); // Guru langsung ke raport
             } else {
                 setTimeout(() => navigate('/dashboard'), 1000); // Admin ke dashboard
             }
