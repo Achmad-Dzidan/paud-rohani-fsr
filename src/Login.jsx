@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Toaster, toast } from 'sonner';
 import './App.css'; 
 
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore'; 
+// Import getDoc untuk cek role
+import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore'; 
 import { db, auth } from './firebase'; 
 
 import { 
@@ -11,9 +12,8 @@ import {
   createUserWithEmailAndPassword,
   setPersistence, 
   browserLocalPersistence, 
-  browserSessionPersistence
-  // sendEmailVerification, // <-- DIHAPUS
-  // signOut // <-- DIHAPUS (Tidak perlu logout paksa lagi)
+  browserSessionPersistence,
+  signOut // Import signOut untuk menendang user
 } from 'firebase/auth';
 
 function Login() { 
@@ -42,33 +42,58 @@ function Login() {
 
     try {
       if (isLoginMode) {
-        // --- LOGIKA LOGIN (LANGSUNG MASUK) ---
+        // --- LOGIKA LOGIN ---
         console.log(">> Proses Login...");
         
-        // 1. Atur Persistence dulu
-        const persistenceType = rememberMe ? browserLocalPersistence : browserSessionPersistence;
-        await setPersistence(auth, persistenceType);
+        // 1. Sign In ke Firebase Auth
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
 
-        // 2. Sign In
-        await signInWithEmailAndPassword(auth, email, password);
-        
-        // 3. Redirect Langsung (Tanpa Cek Verifikasi)
-        toast.success('Login Berhasil!');
-        setTimeout(() => navigate('/dashboard'), 1000);
+        // 2. AMBIL DATA ROLE DARI FIRESTORE
+        const docRef = doc(db, "account", user.uid);
+        const docSnap = await getDoc(docRef);
+
+        if (docSnap.exists()) {
+            const userData = docSnap.data();
+            
+            // 3. CEK ROLE
+            if (userData.role === 'user') {
+                // JIKA USER BIASA: Tampilkan Pesan & Logout Paksa
+                toast.warning("Akun belum aktif. Silahkan hubungi Administrator Sekolah.");
+                await signOut(auth); // Tendang keluar
+                setLoading(false);
+                return; // Stop proses
+            }
+
+            // Jika Admin atau Teacher, lanjut set persistence
+            const persistenceType = rememberMe ? browserLocalPersistence : browserSessionPersistence;
+            await setPersistence(auth, persistenceType);
+
+            toast.success(`Selamat datang, ${userData.name || 'User'}!`);
+            
+            // Redirect sesuai role (Opsional, atau semua ke dashboard)
+            if (userData.role === 'teacher') {
+                setTimeout(() => navigate('/raport'), 1000); // Guru langsung ke raport
+            } else {
+                setTimeout(() => navigate('/dashboard'), 1000); // Admin ke dashboard
+            }
+
+        } else {
+            toast.error("Data akun tidak ditemukan di database.");
+            await signOut(auth);
+        }
 
       } else {
-        // --- LOGIKA REGISTER (TANPA KIRIM EMAIL) ---
+        // --- LOGIKA REGISTER (TETAP SAMA) ---
         console.log(">> Proses Register...");
-        
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
 
-        // Simpan ke Collection 'account'
         await setDoc(doc(db, "account", user.uid), {
             name: fullName,
             username: username.replace(/\s+/g, '').toLowerCase(),
             email: email,
-            role: 'user', // Default role
+            role: 'user', // Default user (akan kena blokir saat coba login)
             photo: '',
             fullName: fullName,
             phoneNumber: phone,
@@ -76,16 +101,14 @@ function Login() {
             createdAt: serverTimestamp()
         });
 
-        toast.success('Registrasi Berhasil! Silakan Login.');
-        setIsLoginMode(true); // Pindah ke tab login
+        toast.success('Registrasi Berhasil! Silakan hubungi Admin untuk aktivasi.');
+        setIsLoginMode(true); 
         setPassword('');
       }
     } catch (error) {
       console.error("Error:", error);
       let errorMessage = "Terjadi kesalahan.";
-      if (error.code === 'auth/email-already-in-use') errorMessage = "Email sudah terdaftar.";
       if (error.code === 'auth/invalid-credential') errorMessage = "Email/Password salah.";
-      
       toast.error(errorMessage);
     } finally {
       setLoading(false);
@@ -94,11 +117,7 @@ function Login() {
 
   const toggleMode = () => {
     setIsLoginMode(!isLoginMode);
-    setEmail('');
-    setPassword('');
-    setFullName('');
-    setUsername('');
-    setPhone('');
+    setEmail(''); setPassword(''); setFullName(''); setUsername(''); setPhone('');
   };
 
   return (
@@ -109,50 +128,21 @@ function Login() {
         <p className="subtitle">School Administration Portal</p>
 
         <form onSubmit={handleAuth}>
+          {/* ... (INPUT FORM SAMA SEPERTI SEBELUMNYA) ... */}
           
           {!isLoginMode && (
             <>
               <div className="form-group">
                 <label className="form-label">Nama Lengkap</label>
-                <div className="input-wrapper">
-                  <i className="fa-regular fa-id-card"></i>
-                  <input type="text" placeholder="Budi Santoso" value={fullName} onChange={(e) => setFullName(e.target.value)} />
-                </div>
+                <div className="input-wrapper"><i className="fa-regular fa-id-card"></i><input type="text" placeholder="Budi Santoso" value={fullName} onChange={(e) => setFullName(e.target.value)} /></div>
               </div>
-
-              <div className="form-group">
-                <label className="form-label">Username</label>
-                <div className="input-wrapper">
-                  <i className="fa-solid fa-at"></i>
-                  <input type="text" placeholder="budi123" value={username} onChange={(e) => setUsername(e.target.value)} />
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">No. WhatsApp</label>
-                <div className="input-wrapper">
-                  <i className="fa-brands fa-whatsapp"></i>
-                  <input type="number" placeholder="0812..." value={phone} onChange={(e) => setPhone(e.target.value)} />
-                </div>
-              </div>
+              <div className="form-group"><label className="form-label">Username</label><div className="input-wrapper"><i className="fa-solid fa-at"></i><input type="text" placeholder="budi123" value={username} onChange={(e) => setUsername(e.target.value)} /></div></div>
+              <div className="form-group"><label className="form-label">No. WhatsApp</label><div className="input-wrapper"><i className="fa-brands fa-whatsapp"></i><input type="number" placeholder="0812..." value={phone} onChange={(e) => setPhone(e.target.value)} /></div></div>
             </>
           )}
 
-          <div className="form-group">
-            <label className="form-label">Email Address</label>
-            <div className="input-wrapper">
-              <i className="fa-regular fa-envelope"></i>
-              <input type="email" placeholder="admin@paud.com" required value={email} onChange={(e) => setEmail(e.target.value)} />
-            </div>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Password</label>
-            <div className="input-wrapper">
-              <i className="fa-solid fa-lock"></i>
-              <input type="password" placeholder="Enter password" required value={password} onChange={(e) => setPassword(e.target.value)} />
-            </div>
-          </div>
+          <div className="form-group"><label className="form-label">Email Address</label><div className="input-wrapper"><i className="fa-regular fa-envelope"></i><input type="email" placeholder="admin@paud.com" required value={email} onChange={(e) => setEmail(e.target.value)} /></div></div>
+          <div className="form-group"><label className="form-label">Password</label><div className="input-wrapper"><i className="fa-solid fa-lock"></i><input type="password" placeholder="Enter password" required value={password} onChange={(e) => setPassword(e.target.value)} /></div></div>
 
           {isLoginMode && (
             <div className="form-group checkbox-group" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px' }}>
@@ -167,10 +157,7 @@ function Login() {
         </form>
 
         <div className="toggle-link">
-          <p>
-            {isLoginMode ? 'Belum punya akun? ' : 'Sudah punya akun? '}
-            <span onClick={toggleMode}>{isLoginMode ? 'Daftar disini' : 'Login disini'}</span>
-          </p>
+          <p>{isLoginMode ? 'Belum punya akun? ' : 'Sudah punya akun? '}<span onClick={toggleMode}>{isLoginMode ? 'Daftar disini' : 'Login disini'}</span></p>
         </div>
       </div>
     </div>

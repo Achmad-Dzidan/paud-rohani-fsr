@@ -345,7 +345,7 @@ const Users = () => {
           >
               <i className="fa-solid fa-bars" style={{color: '#334155', fontSize: '16px'}}></i>
           </button>
-          <div className="page-title" style={{ marginLeft: windowWidth < 768 ? '50px' : '0' }}><h1>User Management</h1><p>Kelola data profil siswa</p></div>
+          <div className="page-title" style={{ marginLeft: windowWidth < 768 ? '50px' : '0' }}><h1>Student Management</h1><p>Kelola data profil siswa</p></div>
         </div>
         
         <div style={{display:'flex', gap:'10px'}}>

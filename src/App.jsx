@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'; // Router adalah alias untuk BrowserRouter
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'; 
 import 'sonner/dist/styles.css';
 import { Toaster } from 'sonner';
 import Login from './Login'; 
@@ -16,24 +16,25 @@ import RaportForm from './pages/RaportForm';
 
 function App() {
   return (
-    // TAMBAHKAN PROPS FUTURE DI SINI
     <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Toaster position="top-center" richColors />
       <Routes>
-        {/* Halaman Login (Tanpa Sidebar) */}
         <Route path="/" element={<Login />} />
         
-        <Route element={<ProtectedRoute />}>
-          {/* Halaman Admin (Dengan Sidebar & Sonner Persistent) */}
+        <Route element={<ProtectedRoute allowedRoles={['admin','teacher']}/>}>
+          <Route element={<Layout />}>
+            <Route path="/users" element={<Users />} />
+            <Route path="/raport" element={<RaportForm />} />
+          </Route>
+        </Route>
+        <Route element={<ProtectedRoute allowedRoles={['admin']}/>}>
           <Route element={<Layout />}>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/income" element={<Income />} />
             <Route path="/daily-income" element={<DailyIncome />} />
             <Route path="/savings" element={<StudentSavings />} />
-            <Route path="/users" element={<Users />} />
             <Route path="/absensi" element={<Absensi />} />
             <Route path="/account" element={<Account />} />
-            <Route path="/raport" element={<RaportForm />} />
           </Route>
         </Route>
       </Routes>

@@ -13,6 +13,8 @@
     "@hello-pangea/dnd": "^18.0.1",
     "browser-image-compression": "^2.0.2",
     "chart.js": "^4.4.1",
+    "exceljs": "^4.4.0",
+    "file-saver": "^2.0.5",
     "firebase": "^10.8.0",
     "html2canvas": "^1.4.1",
     "jspdf": "^2.5.1",
