@@ -23,8 +23,6 @@ const StudentSavingsForm = () => {
       return new Date(dateStr).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
     };
 
-  // HAPUS windowWidth DARI SINI (SALAH POSISI)
-
   useEffect(() => {
     const fetchUsers = async () => {
       const snap = await getDocs(collection(db, "users"));
@@ -55,8 +53,20 @@ const StudentSavingsForm = () => {
     e.preventDefault();
     if (!formData.userId || !formData.amount) { toast.error("Lengkapi data!"); return; }
     
+    // --- MODIFIKASI PERHITUNGAN DISINI ---
+    // Rumus: (Input - 6) * 1000
+    // Contoh: Input 10 -> (10 - 6) * 1000 = 4000
+    const rawInput = parseInt(formData.amount);
+    const realAmount = (rawInput - 6) * 1000; 
+
+    // Validasi tambahan agar tidak negatif (Opsional, hapus jika boleh negatif)
+    if (realAmount < 0) {
+        toast.error("Nilai input harus lebih besar dari 6!");
+        return;
+    }
+
     const currentBal = await getUserBalance(formData.userId);
-    const realAmount = parseInt(formData.amount) * 1000;
+    
     let adminFee = 0, totalTransaction = realAmount;
     
     if (type === 'expense') { adminFee = realAmount * 0.1; totalTransaction = realAmount + adminFee; }
@@ -106,7 +116,7 @@ const StudentSavingsForm = () => {
             </div>
 
             <div className="form-group">
-                <label className="form-label">Amount (Ribuan) *</label>
+                <label className="form-label">Amount (Satuan) *</label>
                 <div style={{position:'relative'}}>
                     <input 
                         type="number" 
@@ -114,13 +124,16 @@ const StudentSavingsForm = () => {
                         value={formData.amount} 
                         onChange={e => setFormData({...formData, amount: e.target.value})} 
                         required 
+                        placeholder="Contoh: 10"
                     />
                     {formData.amount && (
                         <div style={{position:'absolute', right:'10px', top:'12px', fontSize:'12px', color:'green', fontWeight:'bold'}}>
-                            = Rp {(parseInt(formData.amount) * 1000).toLocaleString('id-ID')}
+                            {/* MODIFIKASI TAMPILAN HELPER: (Input - 6) * 1000 */}
+                            = Rp {((parseInt(formData.amount) - 6) * 1000).toLocaleString('id-ID')}
                         </div>
                     )}
                 </div>
+                <small style={{fontSize:'11px', color:'#64748b'}}>*Nilai akan dikurangi 6 lalu dikali 1.000 (Contoh: 10 → 4.000)</small>
             </div>
 
             <div className="form-group"><label className="form-label">Date *</label><input type="date" className="form-control" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} required /></div>
