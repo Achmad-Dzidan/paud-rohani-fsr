@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { collection, getDocs, addDoc, serverTimestamp, query, where, onSnapshot, orderBy } from 'firebase/firestore';
+import { 
+  collection, getDocs, addDoc, setDoc, getDoc, doc, 
+  serverTimestamp, query, where, onSnapshot, orderBy 
+} from 'firebase/firestore';
 import { db } from '../firebase.js';
 import { toast } from 'sonner';
 
@@ -17,7 +20,6 @@ const StudentSavingsForm = () => {
   const [calculation, setCalculation] = useState({ currentBalance: 0, inputAmount: 0, fee: 0, total: 0, newBalance: 0 });
   const [formData, setFormData] = useState({ userId: '', amount: '', date: new Date().toISOString().split('T')[0], note: '' });
   
-  // Format Date untuk Tampilan UI
   const formatDateDisplay = (dateStr) => {
       if (!dateStr) return '-';
       return new Date(dateStr).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
@@ -53,20 +55,16 @@ const StudentSavingsForm = () => {
     e.preventDefault();
     if (!formData.userId || !formData.amount) { toast.error("Lengkapi data!"); return; }
     
-    // --- MODIFIKASI PERHITUNGAN DISINI ---
-    // Rumus: (Input - 6) * 1000
-    // Contoh: Input 10 -> (10 - 6) * 1000 = 4000
+    // --- MODIFIKASI PERHITUNGAN ---
     const rawInput = parseInt(formData.amount);
     const realAmount = (rawInput - 6) * 1000; 
 
-    // Validasi tambahan agar tidak negatif (Opsional, hapus jika boleh negatif)
     if (realAmount < 0) {
         toast.error("Nilai input harus lebih besar dari 6!");
         return;
     }
 
     const currentBal = await getUserBalance(formData.userId);
-    
     let adminFee = 0, totalTransaction = realAmount;
     
     if (type === 'expense') { adminFee = realAmount * 0.1; totalTransaction = realAmount + adminFee; }
@@ -75,25 +73,59 @@ const StudentSavingsForm = () => {
     setShowModal(true);
   };
 
+  // --- FUNCTION BARU: UPDATE ATTENDANCE ---
+  const updateAttendance = async (dateStr, userId) => {
+    try {
+        const attendanceRef = doc(db, "attendance", dateStr);
+        
+        // setDoc dengan { merge: true } akan:
+        // 1. Membuat dokumen jika tanggal tersebut belum ada.
+        // 2. Mengupdate dokumen jika sudah ada (menambah user baru ke map 'records').
+        await setDoc(attendanceRef, {
+            date: dateStr,
+            records: {
+                [userId]: "H" // Set status Hadir untuk user ini
+            },
+            updatedAt: serverTimestamp()
+        }, { merge: true });
+        
+    } catch (error) {
+        console.error("Gagal update absensi:", error);
+        toast.error("Gagal mencatat absensi otomatis");
+    }
+  };
+
   const handleFinalSubmit = async () => {
     setLoading(true);
     try {
       const user = users.find(u => u.id === formData.userId);
       let finalNote = formData.note;
+      
+      // Modifikasi Note (Sesuai request sebelumnya tentang School Fee)
+      if (type === 'income') {
+          // Logika School Fee 6k (opsional, sesuaikan jika Anda masih pakai logika note ini)
+          // finalNote = `[School Fee: Rp 6.000] [Net Saving: Rp ${calculation.inputAmount.toLocaleString('id-ID')}] ${formData.note}`;
+          
+          // --- PANGGIL FUNGSI ABSENSI DISINI ---
+          await updateAttendance(formData.date, formData.userId);
+      }
+
       if (type === 'expense' && calculation.fee > 0) {
           finalNote = `[Withdraw: Rp ${calculation.inputAmount.toLocaleString('id-ID')} + Adm: Rp ${calculation.fee.toLocaleString('id-ID')}] ${formData.note}`;
       }
+
       await addDoc(collection(db, "transactions"), {
         userId: formData.userId, userName: user ? user.name : 'Unknown', amount: type==='expense'?calculation.total:calculation.inputAmount,
         date: formData.date, note: finalNote, type: type, createdAt: serverTimestamp()
       });
-      toast.success("Berhasil!"); setShowModal(false);
+
+      toast.success("Berhasil! Transaksi & Absensi (H) tercatat."); 
+      setShowModal(false);
       setFormData(prev => ({ userId: isUserPinned ? prev.userId : '', amount: '', date: prev.date, note: '' }));
     } catch (e) { toast.error(e.message); } finally { setLoading(false); }
   };
 
   const availableUsers = users.filter(u => !existingUserIds.has(u.id) || u.id === formData.userId);
-
   return (
     <div className="form-card" style={{marginTop:'20px'}}>
         <h2 style={{marginBottom:'20px', fontSize:'18px', borderBottom:'1px solid #e2e8f0', paddingBottom:'10px'}}>Income Management Form</h2>
