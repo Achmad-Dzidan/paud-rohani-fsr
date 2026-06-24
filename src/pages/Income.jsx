@@ -17,6 +17,9 @@ const StudentSavingsForm = () => {
   const [existingUserIds, setExistingUserIds] = useState(new Set());
   const [isUserPinned, setIsUserPinned] = useState(false);
   
+  // STATE BARU: Untuk mengecek apakah mode Take All aktif
+  const [isTakeAll, setIsTakeAll] = useState(false); 
+  
   const [calculation, setCalculation] = useState({ currentBalance: 0, inputAmount: 0, fee: 0, total: 0, newBalance: 0 });
   const [formData, setFormData] = useState({ userId: '', amount: '', date: new Date().toISOString().split('T')[0], note: '' });
   
@@ -53,38 +56,66 @@ const StudentSavingsForm = () => {
 
   const handlePreSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.userId || !formData.amount) { toast.error("Lengkapi data!"); return; }
+    if (!formData.userId) { toast.error("Pilih siswa terlebih dahulu!"); return; }
+    if (!isTakeAll && !formData.amount) { toast.error("Lengkapi data nominal!"); return; }
     
-    // --- MODIFIKASI PERHITUNGAN ---
-    const rawInput = parseInt(formData.amount);
-    const realAmount = (rawInput - 6) * 1000; 
-
-    if (realAmount < 0) {
-        toast.error("Nilai input harus lebih besar dari 6!");
-        return;
+    // Tarik balance terlebih dahulu untuk keperluan validasi atau take all
+    const currentBal = await getUserBalance(formData.userId);
+    
+    let realAmount = 0;
+    let adminFee = 0;
+    let totalTransaction = 0;
+    
+    // --- MODIFIKASI LOGIKA TAKE ALL & EXPENSE ---
+    if (type === 'expense' && isTakeAll) {
+        if (currentBal <= 0) {
+            toast.error("Tabungan kosong, tidak bisa Take All!");
+            return;
+        }
+        // Rumus Take All: A = Tabungan, @ = A * 10%, Total didapat = A - @
+        totalTransaction = currentBal;            // A (Nilai yang akan mengurangi tabungan hingga 0)
+        adminFee = currentBal * 0.1;              // @ (Fee Admin)
+        realAmount = currentBal - adminFee;       // Uang bersih yang diterima siswa
+    } else {
+        const rawInput = parseInt(formData.amount);
+        
+        if (type === 'income') {
+            realAmount = (rawInput - 6) * 1000;
+            if (realAmount < 0) {
+                toast.error("Nilai input harus lebih besar dari 6!");
+                return;
+            }
+            totalTransaction = realAmount;
+        } else if (type === 'expense') {
+            // Expense normal: tidak mengurangi -6
+            realAmount = rawInput * 1000;
+            if (realAmount <= 0) {
+                toast.error("Nilai input harus lebih besar dari 0!");
+                return;
+            }
+            adminFee = realAmount * 0.1;
+            totalTransaction = realAmount + adminFee; // Total uang yang ditarik dari saldo
+        }
     }
 
-    const currentBal = await getUserBalance(formData.userId);
-    let adminFee = 0, totalTransaction = realAmount;
+    setCalculation({ 
+        currentBalance: currentBal, 
+        inputAmount: realAmount, // Uang bersih untuk siswa
+        fee: adminFee, 
+        total: totalTransaction, // Total potongan dari tabungan
+        newBalance: currentBal + (type === 'income' ? realAmount : -totalTransaction) // Jika Take all, otomatis 0
+    });
     
-    if (type === 'expense') { adminFee = realAmount * 0.1; totalTransaction = realAmount + adminFee; }
-    
-    setCalculation({ currentBalance: currentBal, inputAmount: realAmount, fee: adminFee, total: totalTransaction, newBalance: currentBal + (type==='income'?realAmount:-totalTransaction) });
     setShowModal(true);
   };
 
-  // --- FUNCTION BARU: UPDATE ATTENDANCE ---
   const updateAttendance = async (dateStr, userId) => {
     try {
         const attendanceRef = doc(db, "attendance", dateStr);
-        
-        // setDoc dengan { merge: true } akan:
-        // 1. Membuat dokumen jika tanggal tersebut belum ada.
-        // 2. Mengupdate dokumen jika sudah ada (menambah user baru ke map 'records').
         await setDoc(attendanceRef, {
             date: dateStr,
             records: {
-                [userId]: "H" // Set status Hadir untuk user ini
+                [userId]: "H"
             },
             updatedAt: serverTimestamp()
         }, { merge: true });
@@ -101,37 +132,44 @@ const StudentSavingsForm = () => {
       const user = users.find(u => u.id === formData.userId);
       let finalNote = formData.note;
       
-      // Modifikasi Note (Sesuai request sebelumnya tentang School Fee)
       if (type === 'income') {
-          // Logika School Fee 6k (opsional, sesuaikan jika Anda masih pakai logika note ini)
-          // finalNote = `[School Fee: Rp 6.000] [Net Saving: Rp ${calculation.inputAmount.toLocaleString('id-ID')}] ${formData.note}`;
-          
-          // --- PANGGIL FUNGSI ABSENSI DISINI ---
           await updateAttendance(formData.date, formData.userId);
       }
 
-      if (type === 'expense' && calculation.fee > 0) {
-          finalNote = `[Withdraw: Rp ${calculation.inputAmount.toLocaleString('id-ID')} + Adm: Rp ${calculation.fee.toLocaleString('id-ID')}] ${formData.note}`;
+      // Modifikasi Note Jika Take All vs Expense Normal
+      if (type === 'expense') {
+          if (isTakeAll) {
+              finalNote = `[Take All: Tabungan Rp ${calculation.total.toLocaleString('id-ID')} | Admin 10%: Rp ${calculation.fee.toLocaleString('id-ID')} | Diterima: Rp ${calculation.inputAmount.toLocaleString('id-ID')}] ${formData.note}`;
+          } else if (calculation.fee > 0) {
+              finalNote = `[Withdraw: Rp ${calculation.inputAmount.toLocaleString('id-ID')} + Adm: Rp ${calculation.fee.toLocaleString('id-ID')}] ${formData.note}`;
+          }
       }
 
       await addDoc(collection(db, "transactions"), {
-        userId: formData.userId, userName: user ? user.name : 'Unknown', amount: type==='expense'?calculation.total:calculation.inputAmount,
-        date: formData.date, note: finalNote, type: type, createdAt: serverTimestamp()
+        userId: formData.userId, 
+        userName: user ? user.name : 'Unknown', 
+        amount: type === 'expense' ? calculation.total : calculation.inputAmount,
+        date: formData.date, 
+        note: finalNote, 
+        type: type, 
+        createdAt: serverTimestamp()
       });
 
       toast.success("Berhasil! Transaksi & Absensi (H) tercatat."); 
       setShowModal(false);
       setFormData(prev => ({ userId: isUserPinned ? prev.userId : '', amount: '', date: prev.date, note: '' }));
+      setIsTakeAll(false); // Reset mode take all setelah berhasil
     } catch (e) { toast.error(e.message); } finally { setLoading(false); }
   };
 
   const availableUsers = users.filter(u => !existingUserIds.has(u.id) || u.id === formData.userId);
+  
   return (
     <div className="form-card" style={{marginTop:'20px'}}>
         <h2 style={{marginBottom:'20px', fontSize:'18px', borderBottom:'1px solid #e2e8f0', paddingBottom:'10px'}}>Income Management Form</h2>
         
         <div className="toggle-container">
-          <button type="button" className={`toggle-btn ${type === 'income' ? 'active-income' : ''}`} onClick={() => setType('income')}><i className="fa-solid fa-plus"></i> Savings Deposit</button>
+          <button type="button" className={`toggle-btn ${type === 'income' ? 'active-income' : ''}`} onClick={() => { setType('income'); setIsTakeAll(false); }}><i className="fa-solid fa-plus"></i> Savings Deposit</button>
           <button type="button" className={`toggle-btn ${type === 'expense' ? 'active-expense' : ''}`} onClick={() => setType('expense')}><i className="fa-solid fa-minus"></i> Savings Withdraw</button>
         </div>
 
@@ -149,23 +187,58 @@ const StudentSavingsForm = () => {
 
             <div className="form-group">
                 <label className="form-label">Amount (Satuan) *</label>
-                <div style={{position:'relative'}}>
-                    <input 
-                        type="number" 
-                        className="form-control" 
-                        value={formData.amount} 
-                        onChange={e => setFormData({...formData, amount: e.target.value})} 
-                        required 
-                        placeholder="Contoh: 10"
-                    />
-                    {formData.amount && (
-                        <div style={{position:'absolute', right:'10px', top:'12px', fontSize:'12px', color:'green', fontWeight:'bold'}}>
-                            {/* MODIFIKASI TAMPILAN HELPER: (Input - 6) * 1000 */}
-                            = Rp {((parseInt(formData.amount) - 6) * 1000).toLocaleString('id-ID')}
-                        </div>
+                {/* MODIFIKASI: Layout flexbox untuk menyisipkan button Take All di sebelah kanan */}
+                <div style={{ display: 'flex', gap: '10px', position: 'relative' }}>
+                    <div style={{ position: 'relative', flex: 1 }}>
+                        <input 
+                            type="number" 
+                            className="form-control" 
+                            value={isTakeAll ? '' : formData.amount} 
+                            onChange={e => {
+                                setFormData({...formData, amount: e.target.value});
+                                if (isTakeAll) setIsTakeAll(false); // Matikan Take All jika user mengetik manual
+                            }} 
+                            required={!isTakeAll} 
+                            disabled={isTakeAll}
+                            placeholder={isTakeAll ? "Seluruh Saldo (Take All)" : "Contoh: 10"}
+                        />
+                        {formData.amount && !isTakeAll && (
+                            <div style={{position:'absolute', right:'10px', top:'12px', fontSize:'12px', color:'green', fontWeight:'bold'}}>
+                                = Rp { (type === 'income' ? (parseInt(formData.amount) - 6) * 1000 : parseInt(formData.amount) * 1000).toLocaleString('id-ID') }
+                            </div>
+                        )}
+                    </div>
+                    {type === 'expense' && (
+                        <button 
+                            type="button" 
+                            onClick={() => {
+                                if (!formData.userId) {
+                                    toast.error("Pilih Siswa terlebih dahulu!");
+                                    return;
+                                }
+                                setIsTakeAll(!isTakeAll);
+                            }}
+                            style={{
+                                backgroundColor: isTakeAll ? 'var(--danger-red)' : '#f1f5f9',
+                                color: isTakeAll ? 'white' : '#475569',
+                                border: '1px solid #cbd5e1',
+                                borderRadius: '8px',
+                                padding: '0 15px',
+                                fontWeight: 'bold',
+                                cursor: 'pointer',
+                                whiteSpace: 'nowrap',
+                                transition: '0.2s'
+                            }}
+                        >
+                            {isTakeAll ? 'Batal' : 'Take All'}
+                        </button>
                     )}
                 </div>
-                <small style={{fontSize:'11px', color:'#64748b'}}>*Nilai akan dikurangi 6 lalu dikali 1.000 (Contoh: 10 → 4.000)</small>
+                <small style={{fontSize:'11px', color:'#64748b'}}>
+                    {type === 'income' 
+                        ? '*Nilai akan dikurangi 6 lalu dikali 1.000 (Contoh: 10 → 4.000)' 
+                        : (isTakeAll ? '*Seluruh saldo tabungan akan ditarik sehingga menjadi 0' : '*Nilai akan dikali 1.000 (Contoh: 10 → 10.000)')}
+                </small>
             </div>
 
             <div className="form-group"><label className="form-label">Date *</label><input type="date" className="form-control" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} required /></div>
@@ -186,7 +259,7 @@ const StudentSavingsForm = () => {
         {showModal && (
             <div className="popup-overlay active" style={{display:'flex'}}>
                 <div className="popup-box">
-                    <h3>Confirm Transaction</h3>
+                    <h3>Confirm {isTakeAll ? 'Take All Transaction' : 'Transaction'}</h3>
                     <p style={{marginBottom:'15px', color:'#64748b'}}>Please review financial details:</p>
                     <div className="popup-details" style={{background:'#f8fafc', padding:'15px', borderRadius:'8px', fontSize:'13px'}}>
                         <div style={{display:'flex', justifyContent:'space-between', marginBottom:'5px'}}>
@@ -202,11 +275,16 @@ const StudentSavingsForm = () => {
                              <span>Current Balance:</span><span>Rp {calculation.currentBalance.toLocaleString('id-ID')}</span>
                         </div>
                         <div style={{display:'flex', justifyContent:'space-between', marginBottom:'5px', fontWeight:'bold', color: type==='income'?'green':'red'}}>
-                             <span>{type === 'income' ? 'Deposit' : 'Withdraw'}:</span><span>{type==='income'?'+':'-'} Rp {calculation.inputAmount.toLocaleString('id-ID')}</span>
+                             <span>{type === 'income' ? 'Deposit' : (isTakeAll ? 'Take All Deduct' : 'Withdraw')}:</span><span>{type==='income'?'+':'-'} Rp {(isTakeAll ? calculation.total : calculation.inputAmount).toLocaleString('id-ID')}</span>
                         </div>
                         {type === 'expense' && (
                             <div style={{display:'flex', justifyContent:'space-between', marginBottom:'5px', color:'red', fontSize:'12px'}}>
                                 <span>@ Admin Fee (10%):</span><span>- Rp {calculation.fee.toLocaleString('id-ID')}</span>
+                            </div>
+                        )}
+                        {isTakeAll && (
+                            <div style={{display:'flex', justifyContent:'space-between', marginBottom:'5px', color:'green', fontSize:'12px', fontWeight:'bold'}}>
+                                <span>Total Bersih Diterima Siswa:</span><span>Rp {calculation.inputAmount.toLocaleString('id-ID')}</span>
                             </div>
                         )}
                         <div style={{borderTop:'1px dashed #cbd5e1', margin:'10px 0'}}></div>
