@@ -63,27 +63,60 @@ const Users = () => {
     return () => unsubscribe();
   }, []);
 
-  // --- IMAGE PROCESSING ---
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) { toast.error("Ukuran file terlalu besar (Max 2MB)"); return; }
+
+    // Pastikan yang diupload adalah gambar
+    if (!file.type.startsWith('image/')) {
+      toast.error('File harus berupa gambar!');
+      return;
+    }
 
     const reader = new FileReader();
     reader.readAsDataURL(file);
+
     reader.onload = (event) => {
       const img = new Image();
       img.src = event.target.result;
+
       img.onload = () => {
+        // --- PROSES KOMPRESI DENGAN CANVAS ---
         const canvas = document.createElement('canvas');
+
+        // Tentukan resolusi maksimal (300px sudah sangat cukup untuk foto profil)
+        // Ini akan membuat string Base64 menjadi sangat ringan
         const MAX_WIDTH = 300;
-        const scaleSize = MAX_WIDTH / img.width;
-        canvas.width = MAX_WIDTH;
-        canvas.height = img.height * scaleSize;
+        const MAX_HEIGHT = 300;
+        let width = img.width;
+        let height = img.height;
+
+        // Hitung rasio aspek agar gambar tidak gepeng
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
         const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
-        setFormData(prev => ({ ...prev, photo: compressedDataUrl }));
+        // Gambar ulang foto ke dalam canvas dengan ukuran baru
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Ekspor canvas menjadi Base64 (Format JPEG, Kualitas 60%)
+        // Kualitas 0.6 sangat optimal (ukuran kecil, gambar masih jelas)
+        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.6);
+
+        // Simpan hasil kompresi ke state formData
+        setFormData({ ...formData, photo: compressedBase64 });
       };
     };
   };
@@ -595,7 +628,10 @@ const Users = () => {
                     <div style={{ width: '70px', height: '70px', borderRadius: '50%', background: formData.photo ? `url(${formData.photo}) center/cover` : '#f1f5f9', border: '2px dashed #cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       {!formData.photo && <i className="fa-solid fa-camera" style={{ color: '#94a3b8' }}></i>}
                     </div>
+
+                    {/* Pastikan ini memanggil fungsi kompresi di atas */}
                     <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageUpload} />
+
                     <div style={{ fontSize: '11px', color: 'var(--primary-blue)', marginTop: '5px' }}>Upload Foto</div>
                   </label>
                 </div>
