@@ -199,7 +199,6 @@ const StudentSavingsForm = () => {
 
                 <div className="form-group">
                     <label className="form-label">Amount (Satuan) *</label>
-                    {/* MODIFIKASI: Layout flexbox untuk menyisipkan button Take All di sebelah kanan */}
                     <div style={{ display: 'flex', gap: '10px', position: 'relative' }}>
                         <div style={{ position: 'relative', flex: 1 }}>
                             <input
@@ -246,7 +245,36 @@ const StudentSavingsForm = () => {
                             </button>
                         )}
                     </div>
-                    <small style={{ fontSize: '11px', color: '#64748b' }}>
+
+                    {/* --- TAMBAHAN: QUICK NUMBER BUTTONS --- */}
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                        {[10, 22, 30, 50].map((num) => (
+                            <button
+                                key={num}
+                                type="button"
+                                onClick={() => {
+                                    setFormData({ ...formData, amount: num.toString() });
+                                    if (isTakeAll) setIsTakeAll(false);
+                                }}
+                                style={{
+                                    padding: '4px 12px',
+                                    backgroundColor: formData.amount === num.toString() && !isTakeAll ? 'var(--primary-blue)' : '#f1f5f9',
+                                    color: formData.amount === num.toString() && !isTakeAll ? 'white' : '#475569',
+                                    border: '1px solid #cbd5e1',
+                                    borderRadius: '16px',
+                                    fontSize: '12px',
+                                    fontWeight: '600',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                {num}
+                            </button>
+                        ))}
+                    </div>
+                    {/* -------------------------------------- */}
+
+                    <small style={{ fontSize: '11px', color: '#64748b', display: 'block', marginTop: '8px' }}>
                         {type === 'income'
                             ? '*Nilai akan dikurangi 6 lalu dikali 1.000 (Contoh: 10 → 4.000)'
                             : (isTakeAll ? '*Seluruh saldo tabungan akan ditarik sehingga menjadi 0' : '*Nilai akan dikali 1.000 (Contoh: 10 → 10.000)')}
