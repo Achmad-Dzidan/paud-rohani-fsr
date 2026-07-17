@@ -248,7 +248,7 @@ const StudentSavingsForm = () => {
 
                     {/* --- TAMBAHAN: QUICK NUMBER BUTTONS --- */}
                     <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
-                        {[10, 22, 30, 50].map((num) => (
+                        {[10, 20, 22, 30, 50].map((num) => (
                             <button
                                 key={num}
                                 type="button"
