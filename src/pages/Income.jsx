@@ -184,9 +184,10 @@ const StudentSavingsForm = () => {
                         <select className="form-control" required value={formData.userId} onChange={e => setFormData({ ...formData, userId: e.target.value })} style={{ flex: 1 }}>
                             <option value="" disabled>{availableUsers.length === 0 ? "Semua lunas" : "Pilih Siswa"}</option>
 
-                            {/* --- MODIFIKASI FILTER DISINI --- */}
+                            {/* --- MODIFIKASI FILTER & URUTAN ABJAD DISINI --- */}
                             {availableUsers
                                 .filter(u => !u.status || u.status === 'Aktif') // Hanya ambil yang Aktif
+                                .sort((a, b) => a.name.localeCompare(b.name))   // Urutkan nama A - Z
                                 .map(u => (
                                     <option key={u.id} value={u.id}>{u.name}</option>
                                 ))

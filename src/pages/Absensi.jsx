@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { collection, query, orderBy, onSnapshot, getDocs, where, writeBatch, doc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../firebase.js'; // Pastikan path ini benar (.js)
+import { db } from '../firebase.js';
 import { toast } from 'sonner';
 
 const Absensi = () => {
@@ -67,15 +67,6 @@ const Absensi = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // 2. FETCH DATA SISWA
-  useEffect(() => {
-    const q = query(collection(db, "users"), orderBy("name", "asc"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setStudents(snapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name })));
-    });
-    return () => unsubscribe();
-  }, []);
-
   // 3. FETCH DATA (Absensi & Income)
   useEffect(() => {
     if (dateRange.length === 0) return;
@@ -126,6 +117,34 @@ const Absensi = () => {
 
     fetchData();
   }, [dateRange]);
+
+  useEffect(() => {
+    const fetchStudents = async () => {
+      try {
+        // Mengambil data dari collection "users"
+        const querySnapshot = await getDocs(collection(db, "users"));
+        
+        // Memasukkan data ke dalam array, LENGKAP DENGAN STATUS
+        const studentsData = querySnapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            // Ambil nama (prioritaskan fullName, lalu nickname, lalu name)
+            name: data.fullName || data.nickname || data.name || 'Tanpa Nama',
+            // Ambil status, jika kosong anggap 'Aktif'
+            status: data.status || 'Aktif' 
+          };
+        });
+
+        // Menyimpan data ke state students
+        setStudents(studentsData);
+      } catch (error) {
+        console.error("Gagal mengambil data siswa:", error);
+      }
+    };
+
+    fetchStudents();
+  }, []); // Array kosong artinya hanya dijalankan sekali saat halaman dimuat
 
   // 4. HELPER: LOGIKA STATUS EFEKTIF
   const getEffectiveStatus = (date, userId) => {
@@ -291,7 +310,12 @@ const Absensi = () => {
                 </tr>
               </thead>
               <tbody>
-                {students.map((student) => (
+                
+                {/* --- MODIFIKASI FILTER DAN SORTING DISINI --- */}
+                {students
+                  .filter(student => !student.status || student.status === 'Aktif') // Hanya status Aktif
+                  .sort((a, b) => a.name.localeCompare(b.name)) // Urutkan A-Z
+                  .map((student) => (
                   <tr key={student.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                     <td style={{ padding: '12px', fontSize: '14px', fontWeight: '500', color: '#0f172a', position: 'sticky', left: 0, background: 'white', zIndex: 5, boxShadow: '2px 0 5px rgba(0,0,0,0.02)' }}>
                       {student.name}
