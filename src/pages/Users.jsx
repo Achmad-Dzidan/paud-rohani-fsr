@@ -10,6 +10,14 @@ import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 
 const Users = () => {
+  // Helper: Format Sentence Case / Title Case (Huruf depan besar)
+  const toSentenceCase = (str) => {
+    if (!str || str === '-') return '-';
+    return String(str).toLowerCase().replace(/(?:^|\s)\w/g, (match) => {
+      return match.toUpperCase();
+    });
+  };
+
   const { toggleSidebar } = useOutletContext();
 
   // --- STATE ---
@@ -124,6 +132,22 @@ const Users = () => {
         setFormData({ ...formData, photo: compressedBase64 });
       };
     };
+  };
+
+  // STATE BARU UNTUK CHECKBOX EXPORT
+  const [exportCategories, setExportCategories] = useState({
+    'Aktif': true, // Default dicentang
+    'Tidak Aktif': false,
+    'Lulus': false,
+    'Bukan Murid PAUD': false
+  });
+
+  // Fungsi untuk toggle checkbox
+  const handleCategoryToggle = (category) => {
+    setExportCategories(prev => ({
+      ...prev,
+      [category]: !prev[category]
+    }));
   };
 
   // --- HANDLERS CRUD ---
@@ -313,23 +337,53 @@ const Users = () => {
     toast.success("PDF berhasil diunduh!");
   };
 
-  // --- HANDLERS EXPORT EXCEL ---
   const handleExportExcel = () => {
-    const dataToExport = getFilteredDataForExport();
+    const selectedCategories = Object.keys(exportCategories).filter(key => exportCategories[key]);
+    
+    if (selectedCategories.length === 0) {
+      toast.error("Pilih minimal 1 kategori untuk di-export!");
+      return;
+    }
 
-    // Map Data sesuai format Excel (Dipecah TTL, Gender Full)
-    const excelData = dataToExport.map((user, index) => ({
+    const filteredUsers = users.filter(user => {
+      const status = user.status || 'Aktif'; 
+      return selectedCategories.includes(status);
+    });
+
+    if (filteredUsers.length === 0) {
+      toast.error("Tidak ada data siswa pada kategori yang dipilih.");
+      return;
+    }
+
+    // --- TERAPKAN FORMAT SENTENCE CASE & KUTIP UNTUK NOMOR IDENTITAS ---
+    const excelData = filteredUsers.map((user, index) => ({
       "No": index + 1,
-      "Nama Lengkap": user.fullName || user.name,
-      "NISN": user.nisn || '-',
-      "NIK": user.nik || '-',
-      "Tempat Lahir": user.birthPlace || '-',
-      "Tanggal Lahir": formatDateDisplay(user.birthDate),
-      "Jenis Kelamin": formatGenderFull(user.gender),
-      "Alamat": user.address || '-',
-      "Nama Ayah": user.fatherName || '-',
-      "Nama Ibu": user.motherName || '-',
-      "Nama Wali": user.guardianName || '-'
+      "Nama Lengkap": toSentenceCase(user.fullName || user.name),
+      "Panggilan": toSentenceCase(user.nickname || '-'),
+      "Kelas": user.className || 'A',
+      "Jenis Kelamin": user.gender || 'L',
+      "Status": user.status || 'Aktif',
+      
+      // Tambahkan kutip (') di depan nomor identitas agar Excel membacanya sebagai teks
+      "NISN": user.nisn ? `'${user.nisn}` : '-',
+      "NIK": user.nik ? `'${user.nik}` : '-',
+      "No KK": user.noKK ? `'${user.noKK}` : '-',
+      
+      "Tempat Lahir": toSentenceCase(user.birthPlace || '-'),
+      "Tanggal Lahir": user.birthDate ? formatDateDisplay(user.birthDate) : '-',
+      "Alamat": toSentenceCase(user.address || '-'),
+      
+      "Nama Ayah": toSentenceCase(user.fatherName || '-'),
+      "NIK Ayah": user.fatherNik ? `'${user.fatherNik}` : '-',
+      "Tempat Lahir Ayah": toSentenceCase(user.fatherBirthPlace || '-'),
+      "Tanggal Lahir Ayah": user.fatherBirthDate ? formatDateDisplay(user.fatherBirthDate) : '-',
+      
+      "Nama Ibu": toSentenceCase(user.motherName || '-'),
+      "NIK Ibu": user.motherNik ? `'${user.motherNik}` : '-',
+      "Tempat Lahir Ibu": toSentenceCase(user.motherBirthPlace || '-'),
+      "Tanggal Lahir Ibu": user.motherBirthDate ? formatDateDisplay(user.motherBirthDate) : '-',
+      
+      "Nama Wali": toSentenceCase(user.guardianName || '-')
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(excelData);
@@ -354,14 +408,6 @@ const Users = () => {
   const cleanNumber = (val) => {
     if (!val) return '';
     return String(val).replace(/^'/, '').trim();
-  };
-
-  // Helper: Format Sentence Case / Title Case (Huruf depan besar)
-  const toSentenceCase = (str) => {
-    if (!str) return '';
-    return String(str).toLowerCase().replace(/(?:^|\s)\w/g, (match) => {
-      return match.toUpperCase();
-    });
   };
 
   // Helper: Format Tanggal (Support: 4 Februari 2022, 04/02/2022, dan Format Excel native)
@@ -775,21 +821,22 @@ const Users = () => {
             </div>
 
             <div className="modal-body" style={{ padding: '20px 0' }}>
-              <label style={{ display: 'block', textAlign: 'left', fontSize: '13px', fontWeight: '600', marginBottom: '5px' }}>Pilih Siswa</label>
-              <select
-                className="form-control"
-                style={{ marginBottom: '20px' }}
-                value={exportTarget}
-                onChange={(e) => setExportTarget(e.target.value)}
-              >
-                <option value="all">Semua Siswa (Default)</option>
-                {/* Loop semua siswa agar bisa dipilih perorangan */}
-                {users.map(user => (
-                  <option key={user.id} value={user.id}>
-                    {user.fullName || user.name}
-                  </option>
+              <label style={{ display: 'block', textAlign: 'left', fontSize: '13px', fontWeight: '600', marginBottom: '10px' }}>Pilih Kategori</label>
+              
+              {/* --- AREA CHECKBOX KATEGORI --- */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', textAlign: 'left', marginBottom: '25px', backgroundColor: '#f8fafc', padding: '15px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                {Object.keys(exportCategories).map((cat) => (
+                  <label key={cat} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', color: '#334155', fontWeight: '500' }}>
+                    <input
+                      type="checkbox"
+                      checked={exportCategories[cat]}
+                      onChange={() => handleCategoryToggle(cat)}
+                      style={{ cursor: 'pointer', width: '16px', height: '16px', accentColor: 'var(--primary-blue)' }}
+                    />
+                    {cat}
+                  </label>
                 ))}
-              </select>
+              </div>
 
               <p style={{ fontSize: '14px', color: '#64748b', marginBottom: '15px' }}>Export to:</p>
 
