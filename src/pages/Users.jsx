@@ -134,6 +134,41 @@ const Users = () => {
     };
   };
 
+  // Fungsi Membuat Link Akses Orang Tua (Selalu Buat Baru & Matikan Link Lama)
+  const handleGenerateEditLink = async (user, copyType) => {
+    try {
+      const now = Date.now();
+      
+      // KUNCI PERUBAHAN: Kita SELALU membuat token baru setiap kali tombol diklik.
+      // Ini otomatis membuat link sebelumnya menjadi tidak valid (karena token di DB berubah).
+      const newToken = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
+      
+      await updateDoc(doc(db, "users", user.id), { 
+        editToken: newToken,
+        editTokenCreatedAt: now,
+        editTokenUsed: false // Reset status menjadi belum dipakai
+      });
+
+      // Buat URL berdasarkan token baru
+      const editLink = `${window.location.origin}/edit-data/${newToken}`;
+      const studentName = user.nickname || user.fullName || user.name;
+      
+      let textToCopy = editLink;
+      
+      // Jika tombol "Copy Pesan" yang ditekan
+      if (copyType === 'full') {
+        textToCopy = `Halo Bapak/Ibu, mohon bantuannya untuk melengkapi data ananda *${studentName}* melalui link berikut:\n\n${editLink}\n\n*Catatan:* Link ini hanya berlaku selama 24 jam dan hanya dapat diisi 1 kali. Terima kasih.`;
+      }
+      
+      // Salin ke clipboard
+      navigator.clipboard.writeText(textToCopy);
+      toast.success(copyType === 'full' ? "Pesan & Link berhasil disalin!" : "Hanya Link disalin!");
+    } catch (error) {
+      console.error(error);
+      toast.error("Gagal membuat link.");
+    }
+  };
+
   // STATE BARU UNTUK CHECKBOX EXPORT
   const [exportCategories, setExportCategories] = useState({
     'Aktif': true, // Default dicentang
@@ -947,9 +982,28 @@ const Users = () => {
               <button className="btn-delete" style={{ color: 'var(--danger-red)', background: 'none', border: '1px solid #fee2e2' }} onClick={handleDeleteUser}>
                 <i className="fa-solid fa-trash-can" style={{ marginRight: '5px' }}></i> Hapus
               </button>
-              <button className="btn-save" onClick={handleOpenEdit}>
-                <i className="fa-solid fa-pen-to-square" style={{ marginRight: '5px' }}></i> Edit
-              </button>
+              
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                {/* TOMBOL COPY LENGKAP DENGAN NAMA ANAK */}
+                <button 
+                  onClick={() => handleGenerateEditLink(selectedUser, 'full')}
+                  style={{ padding: '8px 15px', background: '#f59e0b', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+                >
+                  <i className="fa-solid fa-copy" style={{ marginRight: '5px' }}></i> Copy Pesan
+                </button>
+
+                {/* TOMBOL COPY HANYA LINK */}
+                <button 
+                  onClick={() => handleGenerateEditLink(selectedUser, 'link')}
+                  style={{ padding: '8px 15px', background: '#d97706', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+                >
+                  <i className="fa-solid fa-link" style={{ marginRight: '5px' }}></i> Copy Link
+                </button>
+
+                <button className="btn-save" onClick={handleOpenEdit}>
+                  <i className="fa-solid fa-pen-to-square" style={{ marginRight: '5px' }}></i> Edit
+                </button>
+              </div>
             </div>
           </div>
         </div>

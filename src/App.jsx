@@ -13,6 +13,7 @@ import StudentSavings from './pages/StudentSavings';
 import ProtectedRoute from './components/ProtectedRoute'; 
 import Account from './pages/Account'; 
 import RaportForm from './pages/RaportForm';
+import PublicEdit from './pages/PublicEdit';
 
 function App() {
   return (
@@ -21,12 +22,15 @@ function App() {
       <Routes>
         <Route path="/" element={<Login />} />
         
+        <Route path="/edit-data/:token" element={<PublicEdit />} />
+        
         <Route element={<ProtectedRoute allowedRoles={['admin','teacher']}/>}>
           <Route element={<Layout />}>
             <Route path="/users" element={<Users />} />
             <Route path="/raport" element={<RaportForm />} />
           </Route>
         </Route>
+        
         <Route element={<ProtectedRoute allowedRoles={['admin']}/>}>
           <Route element={<Layout />}>
             <Route path="/dashboard" element={<Dashboard />} />
