@@ -17,6 +17,7 @@ const DailyIncome = () => {
 
   // --- STATE UI ---
   const [selectedDate, setSelectedDate] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [activeCardId, setActiveCardId] = useState(null); 
   
   const [showModal, setShowModal] = useState(false);
@@ -74,11 +75,27 @@ const DailyIncome = () => {
     return () => unsubscribe();
   }, []);
 
-  // 4. GROUPING LOGIC
+  // 4. GROUPING & FILTERING LOGIC
   useEffect(() => {
     if (transactions.length === 0) { setGroupedData({}); return; }
     let filtered = transactions;
-    if (selectedDate) { filtered = transactions.filter(t => t.date === selectedDate); }
+    
+    // Filter berdasarkan Tanggal
+    if (selectedDate) { 
+      filtered = filtered.filter(t => t.date === selectedDate); 
+    }
+    
+    // Filter berdasarkan Search (Nama atau Catatan)
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(t => {
+        const userName = (t.userName || '').toLowerCase();
+        const note = (t.note || '').toLowerCase();
+        const nickname = (userMap[t.userId]?.nickname || '').toLowerCase();
+        
+        return userName.includes(query) || note.includes(query) || nickname.includes(query);
+      });
+    }
     
     const groups = filtered.reduce((acc, curr) => {
       const dateKey = curr.date;
@@ -86,8 +103,9 @@ const DailyIncome = () => {
       acc[dateKey].push(curr);
       return acc;
     }, {});
+    
     setGroupedData(groups);
-  }, [transactions, selectedDate]);
+  }, [transactions, selectedDate, searchQuery, userMap]); // Pastikan searchQuery dan userMap masuk ke array dependensi
 
 
   // --- HANDLERS ---
@@ -186,7 +204,23 @@ const DailyIncome = () => {
             <p>Monitor Pemasukan & Pengeluaran</p>
           </div>
         </div>
-        <div className="date-filter-wrapper" style={{ display: 'flex', alignItems: 'center' }}>
+        <div className="filter-wrapper" style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap', justifyContent: 'flex-end', marginTop: windowWidth < 768 ? '15px' : '0' }}>
+          
+          {/* SEARCH BAR */}
+          <div style={{ position: 'relative', width: windowWidth < 768 ? '100%' : '200px' }}>
+            <i className="fa-solid fa-magnifying-glass" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: '13px' }}></i>
+            <input 
+              type="text" 
+              placeholder="Cari nama atau catatan..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="form-control"
+              style={{ width: '100%', padding: '8px 10px 8px 35px', borderRadius: '8px', border: '1px solid #cbd5e1', outline: 'none', fontSize: '13px', margin: 0 }}
+            />
+          </div>
+
+          {/* DATE FILTER */}
+          <div style={{ display: 'flex', alignItems: 'center' }}>
             <div style={{ position: 'relative', display: 'inline-block' }}>
                 <div className="form-control" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', cursor: 'pointer', background: 'white', width: '160px', padding: '8px 12px', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
                     <span style={{ fontWeight: '600', color: selectedDate ? '#334155' : '#94a3b8', fontSize:'13px' }}>{formatDateDisplay(selectedDate)}</span>
@@ -194,7 +228,9 @@ const DailyIncome = () => {
                 </div>
                 <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer', zIndex: 10 }} onClick={(e) => e.target.showPicker && e.target.showPicker()} />
             </div>
-            {selectedDate && <button onClick={() => setSelectedDate('')} style={{ marginLeft:'8px', background:'none', border:'none', color:'var(--danger-red)', cursor:'pointer', fontSize:'12px' }}>Clear</button>}
+            {selectedDate && <button onClick={() => setSelectedDate('')} style={{ marginLeft:'8px', background:'none', border:'none', color:'var(--danger-red)', cursor:'pointer', fontSize:'12px', fontWeight: 'bold' }}>Clear</button>}
+          </div>
+
         </div>
       </div>
 

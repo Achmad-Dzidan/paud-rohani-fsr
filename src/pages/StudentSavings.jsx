@@ -13,6 +13,7 @@ const StudentSavings = () => {
 
   // STATE
   const [students, setStudents] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
   
   // savingsData: { balance: number, minDate: string, maxDate: string }
   const [savingsData, setSavingsData] = useState({});
@@ -247,26 +248,63 @@ const StudentSavings = () => {
       return s ? (s.nickname || s.name) : "Loading...";
   }
 
+  // --- PINDAHKAN LOGIKA SEARCH KE SINI (DI ATAS RETURN) ---
+  const searchedStudents = students.filter(student => {
+      if (!searchQuery) return true; 
+      
+      const query = searchQuery.toLowerCase();
+      const matchFullName = (student.fullName || '').toLowerCase().includes(query);
+      const matchNickname = (student.nickname || student.name || '').toLowerCase().includes(query);
+      
+      return matchFullName || matchNickname;
+  });
+
   return (
     <div style={{ width: '100%' }}>
       
-      <div className="header-section">
-        <div className="page-title-wrapper" style={{ display: 'flex', alignItems: 'center' }}>
-          <button className="mobile-toggle-btn floating-menu-btn" onClick={toggleSidebar} style={{ position: 'fixed', top: '20px', left: '20px', zIndex: 9999, background: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', width: '40px', height: '40px', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', cursor: 'pointer' }}>
-            <i className="fa-solid fa-bars" style={{color: '#334155', fontSize: '16px'}}></i>
-          </button>
-          <div className="page-title" style={{ marginLeft: windowWidth < 768 ? '50px' : '0' }}><h1>Student Savings</h1><p>Klik kartu siswa untuk melihat buku tabungan</p></div>
+        {/* HEADER DENGAN SEARCH BAR */}
+        <div className="header-section">
+            <div className="page-title-wrapper" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', flexWrap: 'wrap', gap: '15px' }}>
+            
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+                <button className="mobile-toggle-btn floating-menu-btn" onClick={toggleSidebar} style={{ position: 'fixed', top: '20px', left: '20px', zIndex: 9999, background: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', width: '40px', height: '40px', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', cursor: 'pointer' }}>
+                <i className="fa-solid fa-bars" style={{color: '#334155', fontSize: '16px'}}></i>
+                </button>
+                <div className="page-title" style={{ marginLeft: windowWidth < 768 ? '50px' : '0' }}>
+                <h1>Student Savings</h1>
+                <p>Klik kartu siswa untuk melihat buku tabungan</p>
+                </div>
+            </div>
+
+            {/* SEARCH BAR */}
+            <div style={{ position: 'relative', minWidth: '250px', maxWidth: '350px', flex: '1', marginTop: windowWidth < 768 ? '10px' : '0' }}>
+                <i className="fa-solid fa-magnifying-glass" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}></i>
+                <input 
+                type="text" 
+                placeholder="Cari nama siswa..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="form-control"
+                style={{ width: '100%', padding: '10px 10px 10px 35px', borderRadius: '8px', border: '1px solid #cbd5e1', outline: 'none', fontSize: '14px', margin: 0 }}
+                />
+            </div>
+
+            </div>
         </div>
-      </div>
 
       <div className="user-grid">
-        {loading ? <p style={{ color: 'var(--text-gray)' }}>Menghitung saldo...</p> : students.length === 0 ? (
-          <p style={{ color: 'var(--text-gray)' }}>Belum ada siswa.</p>
+        {/* PERBAIKAN: Ubah pengecekan menjadi searchedStudents.length */}
+        {loading ? <p style={{ color: 'var(--text-gray)' }}>Menghitung saldo...</p> : searchedStudents.length === 0 ? (
+          <p style={{ color: 'var(--text-gray)' }}>
+            {searchQuery ? 'Siswa tidak ditemukan.' : 'Belum ada siswa.'}
+          </p>
         ) : (
-          students.map((student) => {
+          searchedStudents.map((student) => {
             const stats = savingsData[student.id] || { balance: 0 };
             const balance = stats.balance;
             const displayName = student.nickname || student.name;
+
+            // Logika pencarian yang salah tempat sudah DIHAPUS dari sini
 
             return (
               <div 

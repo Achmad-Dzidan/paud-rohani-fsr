@@ -23,6 +23,7 @@ const Users = () => {
   // --- STATE ---
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // State Modal CRUD & Detail
   const [showModal, setShowModal] = useState(false);
@@ -605,6 +606,17 @@ const Users = () => {
     }
   };
 
+  // --- LOGIKA PENCARIAN REALTIME ---
+  const searchedUsers = users.filter(user => {
+    if (!searchQuery) return true; // Jika kolom pencarian kosong, tampilkan semua
+    
+    const query = searchQuery.toLowerCase();
+    const matchFullName = (user.fullName || '').toLowerCase().includes(query);
+    const matchNickname = (user.nickname || user.name || '').toLowerCase().includes(query);
+    
+    return matchFullName || matchNickname;
+  });
+
   return (
     <div style={{ width: '100%' }}>
 
@@ -645,28 +657,44 @@ const Users = () => {
           <div className="page-title" style={{ marginLeft: windowWidth < 768 ? '50px' : '0' }}><h1>Student Management</h1><p>Kelola data profil siswa</p></div>
         </div>
 
-        {/* --- TOMBOL HEADER --- */}
-        <div style={{ display: 'flex', gap: '10px' }}>
-          {/* TOMBOL IMPORT */}
-          <button 
-            className="btn-add" 
-            onClick={() => { setShowImportModal(true); setImportPreviewData([]); setImportResults(null); }} 
-            style={{ backgroundColor: '#0284c7' }}
-          >
-            <i className="fa-solid fa-file-import" style={{ marginRight: '8px' }}></i> Import
-          </button>
+        {/* --- HEADER KONTROL (SEARCH & TOMBOL) --- */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' }}>
+          
+          {/* SEARCH BAR */}
+          <div style={{ position: 'relative', flex: '1', minWidth: '250px', maxWidth: '350px' }}>
+            <i className="fa-solid fa-magnifying-glass" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}></i>
+            <input 
+              type="text" 
+              placeholder="Cari nama lengkap atau panggilan..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="form-control"
+              style={{ width: '100%', padding: '10px 10px 10px 35px', borderRadius: '8px', border: '1px solid #cbd5e1', outline: 'none', fontSize: '14px', margin: 0 }}
+            />
+          </div>
+          
+          {/* --- TOMBOL HEADER --- */}
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button 
+              className="btn-add" 
+              onClick={() => { setShowImportModal(true); setImportPreviewData([]); setImportResults(null); }} 
+              style={{ backgroundColor: '#0284c7' }}
+            >
+              <i className="fa-solid fa-file-import" style={{ marginRight: '8px' }}></i> Import
+            </button>
 
-          <button
-            className="btn-add"
-            onClick={() => setShowExportModal(true)}
-            style={{ backgroundColor: '#16a34a' }}
-          >
-            <i className="fa-solid fa-file-export" style={{ marginRight: '8px' }}></i> Export
-          </button>
+            <button
+              className="btn-add"
+              onClick={() => setShowExportModal(true)}
+              style={{ backgroundColor: '#16a34a' }}
+            >
+              <i className="fa-solid fa-file-export" style={{ marginRight: '8px' }}></i> Export
+            </button>
 
-          <button className="btn-add" onClick={handleOpenAdd}>
-            <i className="fa-solid fa-user-plus"></i> Add User
-          </button>
+            <button className="btn-add" onClick={handleOpenAdd}>
+              <i className="fa-solid fa-user-plus"></i> Add User
+            </button>
+          </div>
         </div>
 
 
@@ -781,9 +809,9 @@ const Users = () => {
             { title: 'Bukan Murid PAUD', statusTarget: 'Bukan Murid PAUD', color: '#8b5cf6' } // Tambahan baru
           ].map((group) => {
             // Filter user berdasarkan status (jika tidak ada status, anggap 'Aktif')
-            const filteredUsers = users.filter(u =>
-              (u.status || 'Aktif') === group.statusTarget
-            );
+            const filteredUsers = searchedUsers.filter(u =>
+                (u.status || 'Aktif') === group.statusTarget
+              );
 
             // Jika tidak ada siswa di grup ini, sembunyikan section-nya
             if (filteredUsers.length === 0) return null;
