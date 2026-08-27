@@ -139,12 +139,12 @@ const Users = () => {
   const handleGenerateEditLink = async (user, copyType) => {
     try {
       const now = Date.now();
-      
+
       // KUNCI PERUBAHAN: Kita SELALU membuat token baru setiap kali tombol diklik.
       // Ini otomatis membuat link sebelumnya menjadi tidak valid (karena token di DB berubah).
       const newToken = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
-      
-      await updateDoc(doc(db, "users", user.id), { 
+
+      await updateDoc(doc(db, "users", user.id), {
         editToken: newToken,
         editTokenCreatedAt: now,
         editTokenUsed: false // Reset status menjadi belum dipakai
@@ -153,14 +153,14 @@ const Users = () => {
       // Buat URL berdasarkan token baru
       const editLink = `${window.location.origin}/edit-data/${newToken}`;
       const studentName = user.nickname || user.fullName || user.name;
-      
+
       let textToCopy = editLink;
-      
+
       // Jika tombol "Copy Pesan" yang ditekan
       if (copyType === 'full') {
         textToCopy = `Halo Bapak/Ibu, mohon bantuannya untuk melengkapi data ananda *${studentName}* melalui link berikut:\n\n${editLink}\n\n*Catatan:* Link ini hanya berlaku selama 24 jam dan hanya dapat diisi 1 kali. Terima kasih.`;
       }
-      
+
       // Salin ke clipboard
       navigator.clipboard.writeText(textToCopy);
       toast.success(copyType === 'full' ? "Pesan & Link berhasil disalin!" : "Hanya Link disalin!");
@@ -228,34 +228,62 @@ const Users = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.fullName.trim() || !formData.nickname.trim()) { toast.error("Nama Lengkap & Panggilan wajib diisi"); return; }
+
+    // Mencegah error ".trim() is not a function" jika fullName/nickname bernilai undefined
+    const currentFullName = formData.fullName || '';
+    const currentNickname = formData.nickname || '';
+
+    if (!currentFullName.trim() || !currentNickname.trim()) {
+      toast.error("Nama Lengkap & Panggilan wajib diisi");
+      return;
+    }
 
     setIsSubmitting(true);
     try {
+      // Membersihkan setiap field dari 'undefined' menggunakan default fallback || ''
       const payload = {
-        name: formData.nickname,
-        fullName: formData.fullName,
-        nickname: formData.nickname,
-        className: formData.className,
-        photo: formData.photo,
-        nisn: formData.nisn, nik: formData.nik,
-        birthPlace: formData.birthPlace, birthDate: formData.birthDate,
-        gender: formData.gender, address: formData.address,
-        fatherName: formData.fatherName, motherName: formData.motherName, guardianName: formData.guardianName,
-        status: formData.status,
+        name: currentNickname,
+        fullName: currentFullName,
+        nickname: currentNickname,
+        className: formData.className || 'A',
+        photo: formData.photo || '',
+        nisn: formData.nisn || '',
+        nik: formData.nik || '',
+        noKK: formData.noKK || '',
+        birthPlace: formData.birthPlace || '',
+        birthDate: formData.birthDate || '',
+        gender: formData.gender || 'L',
+        address: formData.address || '',
+        fatherName: formData.fatherName || '',
+        fatherNik: formData.fatherNik || '',
+        fatherBirthPlace: formData.fatherBirthPlace || '',
+        fatherBirthDate: formData.fatherBirthDate || '',
+        motherName: formData.motherName || '',
+        motherNik: formData.motherNik || '',
+        motherBirthPlace: formData.motherBirthPlace || '',
+        motherBirthDate: formData.motherBirthDate || '',
+        guardianName: formData.guardianName || '',
+        status: formData.status || 'Aktif',
         updatedAt: serverTimestamp()
       };
 
       if (isEditing) {
+        // Proses UPDATE ke Firestore
         await updateDoc(doc(db, "users", formData.id), payload);
         toast.success("Data siswa diperbarui!");
       } else {
+        // Proses ADD BARU ke Firestore
         await addDoc(collection(db, "users"), { ...payload, createdAt: serverTimestamp() });
         toast.success("Siswa baru ditambahkan!");
       }
 
       setShowModal(false);
-    } catch (error) { toast.error("Gagal menyimpan: " + error.message); } finally { setIsSubmitting(false); }
+    } catch (error) {
+      console.error("Gagal menyimpan ke Firestore:", error);
+      toast.error("Gagal menyimpan: " + error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleDeleteUser = async () => {
@@ -375,14 +403,14 @@ const Users = () => {
 
   const handleExportExcel = () => {
     const selectedCategories = Object.keys(exportCategories).filter(key => exportCategories[key]);
-    
+
     if (selectedCategories.length === 0) {
       toast.error("Pilih minimal 1 kategori untuk di-export!");
       return;
     }
 
     const filteredUsers = users.filter(user => {
-      const status = user.status || 'Aktif'; 
+      const status = user.status || 'Aktif';
       return selectedCategories.includes(status);
     });
 
@@ -399,26 +427,26 @@ const Users = () => {
       "Kelas": user.className || 'A',
       "Jenis Kelamin": user.gender || 'L',
       "Status": user.status || 'Aktif',
-      
+
       // Tambahkan kutip (') di depan nomor identitas agar Excel membacanya sebagai teks
       "NISN": user.nisn ? `'${user.nisn}` : '-',
       "NIK": user.nik ? `'${user.nik}` : '-',
       "No KK": user.noKK ? `'${user.noKK}` : '-',
-      
+
       "Tempat Lahir": toSentenceCase(user.birthPlace || '-'),
       "Tanggal Lahir": user.birthDate ? formatDateDisplay(user.birthDate) : '-',
       "Alamat": toSentenceCase(user.address || '-'),
-      
+
       "Nama Ayah": toSentenceCase(user.fatherName || '-'),
       "NIK Ayah": user.fatherNik ? `'${user.fatherNik}` : '-',
       "Tempat Lahir Ayah": toSentenceCase(user.fatherBirthPlace || '-'),
       "Tanggal Lahir Ayah": user.fatherBirthDate ? formatDateDisplay(user.fatherBirthDate) : '-',
-      
+
       "Nama Ibu": toSentenceCase(user.motherName || '-'),
       "NIK Ibu": user.motherNik ? `'${user.motherNik}` : '-',
       "Tempat Lahir Ibu": toSentenceCase(user.motherBirthPlace || '-'),
       "Tanggal Lahir Ibu": user.motherBirthDate ? formatDateDisplay(user.motherBirthDate) : '-',
-      
+
       "Nama Wali": toSentenceCase(user.guardianName || '-')
     }));
 
@@ -484,7 +512,7 @@ const Users = () => {
   // Download Template Excel
   const handleDownloadTemplate = () => {
     const headers = [
-      "Nama Lengkap", "Nama Panggilan", "Kelas (A/B)", "Jenis Kelamin (L/P)", 
+      "Nama Lengkap", "Nama Panggilan", "Kelas (A/B)", "Jenis Kelamin (L/P)",
       "Tempat Lahir", "Tanggal Lahir", "Status (Aktif/Tidak Aktif/Lulus)", "NISN", "NIK", "No KK", "Alamat",
       "Nama Ayah", "NIK Ayah", "Tempat Lahir Ayah", "Tanggal Lahir Ayah",
       "Nama Ibu", "NIK Ibu", "Tempat Lahir Ibu", "Tanggal Lahir Ibu",
@@ -551,7 +579,7 @@ const Users = () => {
       // 1. Ambil data siswa yang sudah ada di Firebase (agar efisien)
       const usersSnap = await getDocs(collection(db, "users"));
       const existingUsers = {};
-      
+
       usersSnap.forEach(document => {
         const data = document.data();
         // Buat index pencarian berdasarkan nickname (atau fullName jika nickname kosong)
@@ -566,14 +594,14 @@ const Users = () => {
           errorCount++;
           continue; // Lewati jika tidak ada nama lengkap
         }
-        
+
         // Tentukan kata kunci pencarian dari baris excel ini
-        const searchKey = student.nickname 
-          ? student.nickname.toLowerCase() 
+        const searchKey = student.nickname
+          ? student.nickname.toLowerCase()
           : student.fullName.toLowerCase();
 
         const existingDocId = existingUsers[searchKey];
-        
+
         const payload = {
           ...student,
           name: student.nickname || student.fullName, // Fallback untuk legacy sistem
@@ -588,9 +616,9 @@ const Users = () => {
           // JIKA BELUM ADA -> TAMBAH DATA BARU
           payload.createdAt = serverTimestamp();
           const newDocRef = await addDoc(collection(db, "users"), payload);
-          
+
           // Tambahkan ke dictionary lokal (mencegah duplikat jika di excel ada 2 nama yg sama)
-          existingUsers[searchKey] = newDocRef.id; 
+          existingUsers[searchKey] = newDocRef.id;
           insertCount++;
         }
       }
@@ -609,11 +637,11 @@ const Users = () => {
   // --- LOGIKA PENCARIAN REALTIME ---
   const searchedUsers = users.filter(user => {
     if (!searchQuery) return true; // Jika kolom pencarian kosong, tampilkan semua
-    
+
     const query = searchQuery.toLowerCase();
     const matchFullName = (user.fullName || '').toLowerCase().includes(query);
     const matchNickname = (user.nickname || user.name || '').toLowerCase().includes(query);
-    
+
     return matchFullName || matchNickname;
   });
 
@@ -659,25 +687,25 @@ const Users = () => {
 
         {/* --- HEADER KONTROL (SEARCH & TOMBOL) --- */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' }}>
-          
+
           {/* SEARCH BAR */}
           <div style={{ position: 'relative', flex: '1', minWidth: '250px', maxWidth: '350px' }}>
             <i className="fa-solid fa-magnifying-glass" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}></i>
-            <input 
-              type="text" 
-              placeholder="Cari nama lengkap atau panggilan..." 
+            <input
+              type="text"
+              placeholder="Cari nama lengkap atau panggilan..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="form-control"
               style={{ width: '100%', padding: '10px 10px 10px 35px', borderRadius: '8px', border: '1px solid #cbd5e1', outline: 'none', fontSize: '14px', margin: 0 }}
             />
           </div>
-          
+
           {/* --- TOMBOL HEADER --- */}
           <div style={{ display: 'flex', gap: '10px' }}>
-            <button 
-              className="btn-add" 
-              onClick={() => { setShowImportModal(true); setImportPreviewData([]); setImportResults(null); }} 
+            <button
+              className="btn-add"
+              onClick={() => { setShowImportModal(true); setImportPreviewData([]); setImportResults(null); }}
               style={{ backgroundColor: '#0284c7' }}
             >
               <i className="fa-solid fa-file-import" style={{ marginRight: '8px' }}></i> Import
@@ -698,7 +726,7 @@ const Users = () => {
         </div>
 
 
-      {/* --- MODAL IMPORT --- */}
+        {/* --- MODAL IMPORT --- */}
         {showImportModal && (
           <div className="modal-overlay active" style={{ display: 'flex' }}>
             <div className="modal-box" style={{ maxWidth: '800px', width: '100%' }}>
@@ -708,7 +736,7 @@ const Users = () => {
               </div>
 
               <div className="modal-body custom-scroll" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
-                
+
                 {/* Hasil Import */}
                 {importResults && (
                   <div style={{ padding: '15px', marginBottom: '15px', borderRadius: '8px', backgroundColor: importResults.error > 0 ? '#fef2f2' : '#f0fdf4', border: `1px solid ${importResults.error > 0 ? '#fecaca' : '#bbf7d0'}` }}>
@@ -781,7 +809,7 @@ const Users = () => {
 
               <div className="modal-footer" style={{ justifyContent: 'flex-end', marginTop: '20px' }}>
                 <button className="btn-cancel" onClick={() => { setShowImportModal(false); setImportPreviewData([]); }} disabled={isImporting}>Tutup</button>
-                
+
                 {!importResults && importPreviewData.length > 0 && (
                   <button className="btn-save" onClick={handleConfirmImport} disabled={isImporting}>
                     {isImporting ? 'Memproses...' : 'Konfirmasi Import'}
@@ -810,8 +838,8 @@ const Users = () => {
           ].map((group) => {
             // Filter user berdasarkan status (jika tidak ada status, anggap 'Aktif')
             const filteredUsers = searchedUsers.filter(u =>
-                (u.status || 'Aktif') === group.statusTarget
-              );
+              (u.status || 'Aktif') === group.statusTarget
+            );
 
             // Jika tidak ada siswa di grup ini, sembunyikan section-nya
             if (filteredUsers.length === 0) return null;
@@ -885,7 +913,7 @@ const Users = () => {
 
             <div className="modal-body" style={{ padding: '20px 0' }}>
               <label style={{ display: 'block', textAlign: 'left', fontSize: '13px', fontWeight: '600', marginBottom: '10px' }}>Pilih Kategori</label>
-              
+
               {/* --- AREA CHECKBOX KATEGORI --- */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', textAlign: 'left', marginBottom: '25px', backgroundColor: '#f8fafc', padding: '15px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
                 {Object.keys(exportCategories).map((cat) => (
@@ -1010,10 +1038,10 @@ const Users = () => {
               <button className="btn-delete" style={{ color: 'var(--danger-red)', background: 'none', border: '1px solid #fee2e2' }} onClick={handleDeleteUser}>
                 <i className="fa-solid fa-trash-can" style={{ marginRight: '5px' }}></i> Hapus
               </button>
-              
+
               <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                 {/* TOMBOL COPY LENGKAP DENGAN NAMA ANAK */}
-                <button 
+                <button
                   onClick={() => handleGenerateEditLink(selectedUser, 'full')}
                   style={{ padding: '8px 15px', background: '#f59e0b', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
                 >
@@ -1021,7 +1049,7 @@ const Users = () => {
                 </button>
 
                 {/* TOMBOL COPY HANYA LINK */}
-                <button 
+                <button
                   onClick={() => handleGenerateEditLink(selectedUser, 'link')}
                   style={{ padding: '8px 15px', background: '#d97706', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
                 >
@@ -1062,27 +1090,28 @@ const Users = () => {
 
                 {/* Data Utama */}
                 <h4 style={{ fontSize: '12px', color: '#64748b', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '1px' }}>Data Utama</h4>
-                <input type="text" className="form-control" placeholder="Nama Lengkap *" required value={formData.fullName} onChange={(e) => setFormData({ ...formData, fullName: e.target.value })} style={{ marginBottom: '10px' }} />
+                {/* PERBAIKAN: Tambahkan || '' pada value */}
+                <input type="text" className="form-control" placeholder="Nama Lengkap *" required value={formData.fullName || ''} onChange={(e) => setFormData({ ...formData, fullName: e.target.value })} style={{ marginBottom: '10px' }} />
 
                 <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
-                  <input type="text" className="form-control" placeholder="Nama Panggilan *" required value={formData.nickname} onChange={(e) => setFormData({ ...formData, nickname: e.target.value })} style={{ flex: 1 }} />
-                  <select className="form-control" value={formData.className} onChange={(e) => setFormData({ ...formData, className: e.target.value })} style={{ width: '90px' }}>
+                  <input type="text" className="form-control" placeholder="Nama Panggilan *" required value={formData.nickname || ''} onChange={(e) => setFormData({ ...formData, nickname: e.target.value })} style={{ flex: 1 }} />
+                  <select className="form-control" value={formData.className || 'A'} onChange={(e) => setFormData({ ...formData, className: e.target.value })} style={{ width: '90px' }}>
                     <option value="A">Kls A</option><option value="B">Kls B</option>
                   </select>
-                  <select className="form-control" value={formData.gender} onChange={(e) => setFormData({ ...formData, gender: e.target.value })} style={{ width: '90px' }}>
+                  <select className="form-control" value={formData.gender || 'L'} onChange={(e) => setFormData({ ...formData, gender: e.target.value })} style={{ width: '90px' }}>
                     <option value="L">L</option><option value="P">P</option>
                   </select>
                 </div>
 
                 {/* Data Kelahiran */}
                 <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
-                  <input type="text" className="form-control" placeholder="Tempat Lahir" value={formData.birthPlace} onChange={(e) => setFormData({ ...formData, birthPlace: e.target.value })} style={{ flex: 1 }} />
+                  <input type="text" className="form-control" placeholder="Tempat Lahir" value={formData.birthPlace || ''} onChange={(e) => setFormData({ ...formData, birthPlace: e.target.value })} style={{ flex: 1 }} />
                   <div style={{ position: 'relative', width: '130px' }}>
                     <div className="form-control" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', fontSize: '13px', background: 'white' }}>
-                      <span style={{ color: formData.birthDate ? '#334155' : '#9ca3af' }}>{formatDateDisplay(formData.birthDate)}</span>
+                      <span style={{ color: formData.birthDate ? '#334155' : '#9ca3af' }}>{formData.birthDate ? formatDateDisplay(formData.birthDate) : 'Tgl Lahir'}</span>
                     </div>
                     <input
-                      type="date" value={formData.birthDate}
+                      type="date" value={formData.birthDate || ''}
                       onChange={(e) => setFormData({ ...formData, birthDate: e.target.value })}
                       style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }}
                       onClick={(e) => e.target.showPicker && e.target.showPicker()}
@@ -1096,11 +1125,10 @@ const Users = () => {
                   <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px' }}>Status Siswa</label>
                   <select
                     className="form-control"
-                    value={formData.status}
+                    value={formData.status || 'Aktif'}
                     onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                     style={{
                       fontWeight: '600',
-                      // Update pewarnaan agar mendukung Bukan Murid PAUD
                       color: formData.status === 'Aktif' ? '#16a34a' : formData.status === 'Lulus' ? '#2563eb' : formData.status === 'Bukan Murid PAUD' ? '#7c3aed' : '#dc2626',
                       border: `1px solid ${formData.status === 'Aktif' ? '#bbf7d0' : formData.status === 'Lulus' ? '#bfdbfe' : formData.status === 'Bukan Murid PAUD' ? '#ddd6fe' : '#fecaca'}`,
                       backgroundColor: formData.status === 'Aktif' ? '#f0fdf4' : formData.status === 'Lulus' ? '#eff6ff' : formData.status === 'Bukan Murid PAUD' ? '#f5f3ff' : '#fef2f2'
@@ -1109,52 +1137,51 @@ const Users = () => {
                     <option value="Aktif">Aktif</option>
                     <option value="Tidak Aktif">Tidak Aktif</option>
                     <option value="Lulus">Lulus</option>
-                    {/* Tambahan Opsi Baru */}
                     <option value="Bukan Murid PAUD">Bukan Murid PAUD</option>
                   </select>
                 </div>
 
                 <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
-                  <input type="number" className="form-control" placeholder="NISN" value={formData.nisn} onChange={(e) => setFormData({ ...formData, nisn: e.target.value })} />
-                  <input type="number" className="form-control" placeholder="NIK Siswa" value={formData.nik} onChange={(e) => setFormData({ ...formData, nik: e.target.value })} />
+                  <input type="number" className="form-control" placeholder="NISN" value={formData.nisn || ''} onChange={(e) => setFormData({ ...formData, nisn: e.target.value })} />
+                  <input type="number" className="form-control" placeholder="NIK Siswa" value={formData.nik || ''} onChange={(e) => setFormData({ ...formData, nik: e.target.value })} />
                 </div>
-                
-                <input type="number" className="form-control" placeholder="Nomor Kartu Keluarga (KK)" value={formData.noKK} onChange={(e) => setFormData({ ...formData, noKK: e.target.value })} style={{ marginBottom: '10px' }} />
-                
-                <textarea className="form-control" placeholder="Alamat Lengkap" value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} style={{ marginBottom: '10px', height: '60px' }}></textarea>
+
+                <input type="number" className="form-control" placeholder="Nomor Kartu Keluarga (KK)" value={formData.noKK || ''} onChange={(e) => setFormData({ ...formData, noKK: e.target.value })} style={{ marginBottom: '10px' }} />
+
+                <textarea className="form-control" placeholder="Alamat Lengkap" value={formData.address || ''} onChange={(e) => setFormData({ ...formData, address: e.target.value })} style={{ marginBottom: '10px', height: '60px' }}></textarea>
 
                 {/* --- DATA BAPAK --- */}
                 <h4 style={{ fontSize: '12px', color: '#64748b', margin: '20px 0 10px', textTransform: 'uppercase', letterSpacing: '1px' }}>Data Ayah</h4>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
-                  <input type="text" className="form-control" placeholder="Nama Ayah" value={formData.fatherName} onChange={(e) => setFormData({ ...formData, fatherName: e.target.value })} />
-                  <input type="number" className="form-control" placeholder="NIK Ayah" value={formData.fatherNik} onChange={(e) => setFormData({ ...formData, fatherNik: e.target.value })} />
-                  
-                  <input type="text" className="form-control" placeholder="Tempat Lahir" value={formData.fatherBirthPlace} onChange={(e) => setFormData({ ...formData, fatherBirthPlace: e.target.value })} />
+                  <input type="text" className="form-control" placeholder="Nama Ayah" value={formData.fatherName || ''} onChange={(e) => setFormData({ ...formData, fatherName: e.target.value })} />
+                  <input type="number" className="form-control" placeholder="NIK Ayah" value={formData.fatherNik || ''} onChange={(e) => setFormData({ ...formData, fatherNik: e.target.value })} />
+
+                  <input type="text" className="form-control" placeholder="Tempat Lahir" value={formData.fatherBirthPlace || ''} onChange={(e) => setFormData({ ...formData, fatherBirthPlace: e.target.value })} />
                   <div style={{ position: 'relative' }}>
                     <div className="form-control" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', fontSize: '13px', background: 'white' }}>
                       <span style={{ color: formData.fatherBirthDate ? '#334155' : '#9ca3af' }}>{formData.fatherBirthDate ? formatDateDisplay(formData.fatherBirthDate) : 'Tanggal Lahir'}</span>
                     </div>
-                    <input type="date" value={formData.fatherBirthDate} onChange={(e) => setFormData({ ...formData, fatherBirthDate: e.target.value })} style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }} onClick={(e) => e.target.showPicker && e.target.showPicker()} />
+                    <input type="date" value={formData.fatherBirthDate || ''} onChange={(e) => setFormData({ ...formData, fatherBirthDate: e.target.value })} style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }} onClick={(e) => e.target.showPicker && e.target.showPicker()} />
                   </div>
                 </div>
 
                 {/* --- DATA IBU --- */}
                 <h4 style={{ fontSize: '12px', color: '#64748b', margin: '20px 0 10px', textTransform: 'uppercase', letterSpacing: '1px' }}>Data Ibu</h4>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
-                  <input type="text" className="form-control" placeholder="Nama Ibu" value={formData.motherName} onChange={(e) => setFormData({ ...formData, motherName: e.target.value })} />
-                  <input type="number" className="form-control" placeholder="NIK Ibu" value={formData.motherNik} onChange={(e) => setFormData({ ...formData, motherNik: e.target.value })} />
-                  
-                  <input type="text" className="form-control" placeholder="Tempat Lahir" value={formData.motherBirthPlace} onChange={(e) => setFormData({ ...formData, motherBirthPlace: e.target.value })} />
+                  <input type="text" className="form-control" placeholder="Nama Ibu" value={formData.motherName || ''} onChange={(e) => setFormData({ ...formData, motherName: e.target.value })} />
+                  <input type="number" className="form-control" placeholder="NIK Ibu" value={formData.motherNik || ''} onChange={(e) => setFormData({ ...formData, motherNik: e.target.value })} />
+
+                  <input type="text" className="form-control" placeholder="Tempat Lahir" value={formData.motherBirthPlace || ''} onChange={(e) => setFormData({ ...formData, motherBirthPlace: e.target.value })} />
                   <div style={{ position: 'relative' }}>
                     <div className="form-control" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', fontSize: '13px', background: 'white' }}>
                       <span style={{ color: formData.motherBirthDate ? '#334155' : '#9ca3af' }}>{formData.motherBirthDate ? formatDateDisplay(formData.motherBirthDate) : 'Tanggal Lahir'}</span>
                     </div>
-                    <input type="date" value={formData.motherBirthDate} onChange={(e) => setFormData({ ...formData, motherBirthDate: e.target.value })} style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }} onClick={(e) => e.target.showPicker && e.target.showPicker()} />
+                    <input type="date" value={formData.motherBirthDate || ''} onChange={(e) => setFormData({ ...formData, motherBirthDate: e.target.value })} style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }} onClick={(e) => e.target.showPicker && e.target.showPicker()} />
                   </div>
                 </div>
 
                 <div style={{ borderTop: '1px dashed #e2e8f0', margin: '15px 0' }}></div>
-                <input type="text" className="form-control" placeholder="Nama Wali (Opsional)" value={formData.guardianName} onChange={(e) => setFormData({ ...formData, guardianName: e.target.value })} />
+                <input type="text" className="form-control" placeholder="Nama Wali (Opsional)" value={formData.guardianName || ''} onChange={(e) => setFormData({ ...formData, guardianName: e.target.value })} />
 
               </div>
 
