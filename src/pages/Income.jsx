@@ -1,11 +1,78 @@
 import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import {
-    collection, getDocs, addDoc, setDoc, getDoc, doc,
-    serverTimestamp, query, where, onSnapshot, orderBy
+    collection, getDocs, addDoc, updateDoc, setDoc, getDoc, doc,
+    serverTimestamp, query, where, onSnapshot, orderBy, increment, writeBatch
 } from 'firebase/firestore';
 import { db } from '../firebase.js';
 import { toast } from 'sonner';
+
+const handleSyncBalances = async () => {
+    const confirmSync = window.confirm("Jalankan sinkronisasi saldo awal? Proses ini akan menghitung ulang seluruh saldo berdasarkan riwayat transaksi.");
+    if (!confirmSync) return;
+
+    try {
+        toast.loading("Menghitung saldo dari histori transaksi...");
+
+        // 1. Ambil SEMUA transaksi
+        const transSnap = await getDocs(collection(db, "transactions"));
+        const userBalances = {};
+
+        // 2. Hitung total saldo per siswa
+        transSnap.forEach(docSnap => {
+            const t = docSnap.data();
+
+            // Abaikan transaksi jika ada penanda skipSavings (sesuai kode Anda sebelumnya)
+            if (t.skipSavings) return;
+
+            const uid = t.userId;
+            if (!uid) return;
+
+            // Jika siswa belum ada di objek hitungan, buatkan nilai awal 0
+            if (!userBalances[uid]) {
+                userBalances[uid] = 0;
+            }
+
+            // Tambah atau kurang sesuai tipe transaksi
+            if (t.type === 'income') {
+                userBalances[uid] += (parseInt(t.amount) || 0);
+            } else if (t.type === 'expense') {
+                userBalances[uid] -= (parseInt(t.amount) || 0);
+            }
+        });
+
+        // 3. Ambil data semua User & Siapkan Batch Update
+        const usersSnap = await getDocs(collection(db, "users"));
+        const batch = writeBatch(db);
+        let updateCount = 0;
+
+        usersSnap.forEach(userDoc => {
+            const uid = userDoc.id;
+            // Ambil hasil hitungan tadi, jika tidak ada transaksi, berarti saldonya 0
+            const finalBalance = userBalances[uid] || 0;
+
+            const userRef = doc(db, "users", uid);
+            // Masukkan perintah update ke dalam batch
+            batch.update(userRef, { balance: finalBalance });
+            updateCount++;
+        });
+
+        // 4. Eksekusi Batch Update
+        if (updateCount > 0) {
+            await batch.commit();
+            toast.dismiss();
+            toast.success(`Berhasil! Saldo awal untuk ${updateCount} siswa telah disinkronkan.`);
+        } else {
+            toast.dismiss();
+            toast.info("Tidak ada data siswa untuk di-update.");
+        }
+
+    } catch (error) {
+        toast.dismiss();
+        console.error("Error Sync:", error);
+        toast.error("Gagal sinkronisasi saldo: " + error.message);
+    }
+};
 
 // --- SUB-COMPONENT 1: STUDENT SAVINGS FORM ---
 const StudentSavingsForm = () => {
@@ -33,8 +100,9 @@ const StudentSavingsForm = () => {
             const snap = await getDocs(collection(db, "users"));
             setUsers(snap.docs.map(doc => ({
                 id: doc.id,
-                name: doc.data().name,
-                status: doc.data().status
+                name: doc.data().name || doc.data().fullName,
+                status: doc.data().status,
+                balance: doc.data().balance || 0 // <-- KUNCI: Tarik nilai balance dari DB!
             })));
         };
         fetchUsers();
@@ -42,44 +110,42 @@ const StudentSavingsForm = () => {
 
     useEffect(() => {
         if (!formData.date) return;
-        const q = query(collection(db, "transactions"), where("date", "==", formData.date), where("type", "==", type));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const ids = new Set(); snapshot.docs.forEach(doc => ids.add(doc.data().userId));
+
+        const fetchExistingTrans = async () => {
+            const q = query(collection(db, "transactions"), where("date", "==", formData.date), where("type", "==", type));
+            const snapshot = await getDocs(q); // Pakai getDocs, bukan onSnapshot
+            const ids = new Set();
+            snapshot.docs.forEach(doc => ids.add(doc.data().userId));
             setExistingUserIds(ids);
-        });
-        return () => unsubscribe();
+        };
+
+        fetchExistingTrans();
     }, [formData.date, type]);
 
-    const getUserBalance = async (userId) => {
-        const q = query(collection(db, "transactions"), where("userId", "==", userId));
-        const snapshot = await getDocs(q);
-        let bal = 0;
-        snapshot.forEach(doc => { const t = doc.data(); if (!t.skipSavings) { if (t.type === 'income') bal += t.amount; else if (t.type === 'expense') bal -= t.amount; } });
-        return bal;
+    const getUserBalance = (userId) => {
+        const user = users.find(u => u.id === userId);
+        return user?.balance || 0;
     };
 
-    const handlePreSubmit = async (e) => {
+    const handlePreSubmit = (e) => {
         e.preventDefault();
         if (!formData.userId) { toast.error("Pilih siswa terlebih dahulu!"); return; }
         if (!isTakeAll && !formData.amount) { toast.error("Lengkapi data nominal!"); return; }
-
-        // Tarik balance terlebih dahulu untuk keperluan validasi atau take all
-        const currentBal = await getUserBalance(formData.userId);
+        const currentBal = getUserBalance(formData.userId);
 
         let realAmount = 0;
         let adminFee = 0;
         let totalTransaction = 0;
 
-        // --- MODIFIKASI LOGIKA TAKE ALL & EXPENSE ---
+        // --- LOGIKA TAKE ALL & EXPENSE (Tetap sama seperti milik Anda) ---
         if (type === 'expense' && isTakeAll) {
             if (currentBal <= 0) {
                 toast.error("Tabungan kosong, tidak bisa Take All!");
                 return;
             }
-            // Rumus Take All: A = Tabungan, @ = A * 10%, Total didapat = A - @
-            totalTransaction = currentBal;            // A (Nilai yang akan mengurangi tabungan hingga 0)
-            adminFee = currentBal * 0.1;              // @ (Fee Admin)
-            realAmount = currentBal - adminFee;       // Uang bersih yang diterima siswa
+            totalTransaction = currentBal;
+            adminFee = currentBal * 0.1;
+            realAmount = currentBal - adminFee;
         } else {
             const rawInput = parseInt(formData.amount);
 
@@ -91,23 +157,22 @@ const StudentSavingsForm = () => {
                 }
                 totalTransaction = realAmount;
             } else if (type === 'expense') {
-                // Expense normal: tidak mengurangi -6
                 realAmount = rawInput * 1000;
                 if (realAmount <= 0) {
                     toast.error("Nilai input harus lebih besar dari 0!");
                     return;
                 }
                 adminFee = realAmount * 0.1;
-                totalTransaction = realAmount + adminFee; // Total uang yang ditarik dari saldo
+                totalTransaction = realAmount + adminFee;
             }
         }
 
         setCalculation({
             currentBalance: currentBal,
-            inputAmount: realAmount, // Uang bersih untuk siswa
+            inputAmount: realAmount,
             fee: adminFee,
-            total: totalTransaction, // Total potongan dari tabungan
-            newBalance: currentBal + (type === 'income' ? realAmount : -totalTransaction) // Jika Take all, otomatis 0
+            total: totalTransaction,
+            newBalance: currentBal + (type === 'income' ? realAmount : -totalTransaction)
         });
 
         setShowModal(true);
@@ -140,7 +205,6 @@ const StudentSavingsForm = () => {
                 await updateAttendance(formData.date, formData.userId);
             }
 
-            // Modifikasi Note Jika Take All vs Expense Normal
             if (type === 'expense') {
                 if (isTakeAll) {
                     finalNote = `[Take All: Tabungan Rp ${calculation.total.toLocaleString('id-ID')} | Admin 10%: Rp ${calculation.fee.toLocaleString('id-ID')} | Diterima: Rp ${calculation.inputAmount.toLocaleString('id-ID')}] ${formData.note}`;
@@ -149,21 +213,42 @@ const StudentSavingsForm = () => {
                 }
             }
 
+            const amountToStore = type === 'expense' ? calculation.total : calculation.inputAmount;
+
+            // 1. Catat transaksi
             await addDoc(collection(db, "transactions"), {
                 userId: formData.userId,
                 userName: user ? user.name : 'Unknown',
-                amount: type === 'expense' ? calculation.total : calculation.inputAmount,
+                amount: amountToStore,
                 date: formData.date,
                 note: finalNote,
                 type: type,
                 createdAt: serverTimestamp()
             });
 
-            toast.success("Berhasil! Transaksi & Absensi (H) tercatat.");
+            // 2. Tambahkan/Kurangi nilai balance langsung pada dokumen user (1 kali Write)
+            const balanceChange = type === 'income' ? amountToStore : -amountToStore;
+            await updateDoc(doc(db, "users", formData.userId), {
+                balance: increment(balanceChange)
+            });
+
+            // 3. Update state lokal agar Current Balance di UI langsung bertambah untuk transaksi berikutnya
+            setUsers(prevUsers => prevUsers.map(u =>
+                u.id === formData.userId
+                    ? { ...u, balance: (u.balance || 0) + balanceChange }
+                    : u
+            ));
+
+            toast.success("Berhasil! Transaksi & Saldo diperbarui.");
             setShowModal(false);
             setFormData(prev => ({ userId: isUserPinned ? prev.userId : '', amount: '', date: prev.date, note: '' }));
-            setIsTakeAll(false); // Reset mode take all setelah berhasil
-        } catch (e) { toast.error(e.message); } finally { setLoading(false); }
+            setIsTakeAll(false);
+        } catch (e) {
+            toast.error(e.message);
+            console.error(e);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const availableUsers = users.filter(u => !existingUserIds.has(u.id) || u.id === formData.userId);
@@ -297,6 +382,21 @@ const StudentSavingsForm = () => {
                 <button type="submit" className="btn-submit" style={{ backgroundColor: type === 'income' ? 'var(--success-green)' : 'var(--danger-red)' }}>Confirm</button>
             </form>
 
+            <button
+                onClick={handleSyncBalances}
+                style={{
+                    padding: '8px 15px',
+                    backgroundColor: '#f59e0b',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontWeight: 'bold',
+                    cursor: 'pointer'
+                }}
+            >
+                <i className="fa-solid fa-rotate"></i> Sync Saldo Awal
+            </button>
+
             {showModal && (
                 <div className="popup-overlay active" style={{ display: 'flex' }}>
                     <div className="popup-box">
@@ -363,7 +463,11 @@ const EventForm = () => {
     useEffect(() => {
         const init = async () => {
             const uSnap = await getDocs(collection(db, "users"));
-            setUsers(uSnap.docs.map(d => ({ id: d.id, name: d.data().name })));
+            setUsers(uSnap.docs.map(d => ({
+                id: d.id,
+                name: d.data().name || d.data().fullName,
+                balance: d.data().balance || 0 // <-- KUNCI: Tarik balance
+            })));
             const q = query(collection(db, "events"), orderBy("createdAt", "desc"));
             onSnapshot(q, (s) => setEvents(s.docs.map(d => ({ id: d.id, ...d.data() }))));
         };
@@ -388,16 +492,17 @@ const EventForm = () => {
         toast.success("Event Added!"); setShowAddEvent(false);
     };
 
-    const handlePreSubmit = async (e) => {
+    const handlePreSubmit = (e) => { // Hapus async
         e.preventDefault();
         if (!formData.userId || !formData.eventId) { toast.error("Data incomplete"); return; }
 
-        const q = query(collection(db, "transactions"), where("userId", "==", formData.userId));
-        const s = await getDocs(q);
-        let bal = 0; s.forEach(d => { const t = d.data(); if (!t.skipSavings) { if (t.type === 'income') bal += t.amount; else if (t.type === 'expense') bal -= t.amount; } });
+        // KUNCI: Ambil saldo langsung dari state lokal 'users'
+        const user = users.find(u => u.id === formData.userId);
+        const bal = user?.balance || 0;
 
         const realPrice = parseInt(formData.amount) * 1000;
-        let fee = 0; if (type === 'expense') fee = realPrice * 0.1;
+        let fee = 0;
+        if (type === 'expense') fee = realPrice * 0.1;
 
         setCalculation({ currentBalance: bal, eventPrice: realPrice, fee: fee, totalDeduction: realPrice + fee });
         setShowModal(true);
@@ -415,23 +520,42 @@ const EventForm = () => {
             let isSkipSavings = false;
 
             if (type === 'income') {
+                // Pembayaran Tunai (Cash) -> Tidak memotong tabungan siswa
                 finalUserId = 'other';
                 finalNote += ` (Tunai: ${user.name})`;
                 isSkipSavings = true;
             } else {
+                // Pembayaran Potong Tabungan (Savings)
                 const priceStr = calculation.eventPrice.toLocaleString('id-ID');
                 const feeStr = calculation.fee.toLocaleString('id-ID');
                 finalNote += ` (Potong Tabungan: Rp ${priceStr} + Adm: Rp ${feeStr})`;
                 finalAmount = calculation.totalDeduction;
             }
 
+            // 1. Catat Transaksi Event Utama
             await addDoc(collection(db, "transactions"), {
-                userId: finalUserId, userName: type === 'income' ? 'Other Transaction' : user.name, studentIdRef: formData.userId,
-                amount: finalAmount, date: formData.date, note: finalNote, type: type, category: 'event', eventId: formData.eventId,
-                skipSavings: isSkipSavings, isCheckpoint: false, createdAt: serverTimestamp()
+                userId: finalUserId,
+                userName: type === 'income' ? 'Other Transaction' : user.name,
+                studentIdRef: formData.userId,
+                amount: finalAmount,
+                date: formData.date,
+                note: finalNote,
+                type: type,
+                category: 'event',
+                eventId: formData.eventId,
+                skipSavings: isSkipSavings,
+                isCheckpoint: false,
+                createdAt: serverTimestamp()
             });
 
+            // 2. Jika Pembayaran Menggunakan TABUNGAN (Expense), Potong Saldo Siswa & Masukkan Pemasukan Operasional
             if (type === 'expense') {
+                // A. Potong Saldo Siswa secara Atomik
+                await updateDoc(doc(db, "users", formData.userId), {
+                    balance: increment(-calculation.totalDeduction)
+                });
+
+                // B. Catat Pemasukan Kas Operasional Sekolah
                 await addDoc(collection(db, "transactions"), {
                     userId: 'other',
                     userName: 'Other Transaction',
@@ -444,10 +568,26 @@ const EventForm = () => {
                     isCheckpoint: false,
                     createdAt: serverTimestamp()
                 });
+
+                // C. Update State UI Lokal
+                setUsers(prevUsers => prevUsers.map(u =>
+                    u.id === formData.userId
+                        ? { ...u, balance: (u.balance || 0) - calculation.totalDeduction }
+                        : u
+                ));
             }
 
-            toast.success("Success!"); setShowModal(false); setPaidIds(prev => new Set(prev).add(formData.userId)); setFormData(prev => ({ ...prev, userId: '', note: '' }));
-        } catch (e) { toast.error(e.message); } finally { setLoading(false); }
+            toast.success("Success!");
+            setShowModal(false);
+            setPaidIds(prev => new Set(prev).add(formData.userId));
+            setFormData(prev => ({ ...prev, userId: '', note: '' }));
+
+        } catch (e) {
+            console.error("Error submit event:", e);
+            toast.error(e.message);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const availableUsers = users.filter(u => !paidIds.has(u.id));
@@ -601,7 +741,6 @@ const OtherForm = () => {
         </div>
     );
 };
-
 
 // === MAIN COMPONENT (MENU UTAMA) ===
 const Income = () => {
