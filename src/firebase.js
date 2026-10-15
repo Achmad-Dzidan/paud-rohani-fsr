@@ -1,10 +1,10 @@
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, enableIndexedDbPersistence } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
-// Mengambil nilai dari .env
-export const firebaseConfig = {
+// 1. Konfigurasi dari Environment Variables
+const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
@@ -13,9 +13,32 @@ export const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
-console.log("Firebase Config Loaded:", firebaseConfig.projectId);
+// 2. Validasi Kredensial
+const requiredEnvVars = ['VITE_FIREBASE_API_KEY', 'VITE_FIREBASE_PROJECT_ID'];
+const missingVars = requiredEnvVars.filter(key => !import.meta.env[key]);
 
-const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
-export const db = getFirestore(app);
-export const storage = getStorage(app);
+if (missingVars.length > 0) {
+  console.error(`[Firebase Initialization] Error: Variabel .env berikut hilang: ${missingVars.join(', ')}`);
+}
+
+// 3. Inisialisasi Singleton
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+
+// 4. Inisialisasi Layanan
+const auth = getAuth(app);
+const db = getFirestore(app);
+const storage = getStorage(app);
+
+// 5. Opsional: Mengaktifkan Firestore Persistence untuk pengalaman Offline
+// Dibalut dalam try-catch agar tidak crash di environment yang tidak mendukung
+if (typeof window !== 'undefined') {
+  enableIndexedDbPersistence(db).catch((err) => {
+    if (err.code === 'failed-precondition') {
+      console.warn("Firestore: Multiple tabs open, persistence disabled in secondary tabs.");
+    } else if (err.code === 'unimplemented') {
+      console.warn("Firestore: The current browser does not support persistence.");
+    }
+  });
+}
+
+export { app, auth, db, storage };
