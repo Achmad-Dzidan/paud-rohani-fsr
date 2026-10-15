@@ -1,10 +1,13 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore, enableIndexedDbPersistence } from "firebase/firestore";
+import { 
+  getFirestore, 
+  enableMultiTabIndexedDbPersistence 
+} from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
-// 1. Konfigurasi dari Environment Variables
-const firebaseConfig = {
+// 1. Konfigurasi Firebase dari Environment Variables
+export const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
@@ -13,32 +16,43 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
-// 2. Validasi Kredensial
-const requiredEnvVars = ['VITE_FIREBASE_API_KEY', 'VITE_FIREBASE_PROJECT_ID'];
-const missingVars = requiredEnvVars.filter(key => !import.meta.env[key]);
+// 2. Audit & Validasi Variabel Lingkungan
+const requiredEnvVars = [
+  'VITE_FIREBASE_API_KEY',
+  'VITE_FIREBASE_AUTH_DOMAIN',
+  'VITE_FIREBASE_PROJECT_ID'
+];
+
+const missingVars = requiredEnvVars.filter((key) => !import.meta.env[key]);
 
 if (missingVars.length > 0) {
-  console.error(`[Firebase Initialization] Error: Variabel .env berikut hilang: ${missingVars.join(', ')}`);
+  console.error(`[Firebase Config Error] Variabel .env berikut tidak ditemukan: ${missingVars.join(', ')}.`);
 }
 
-// 3. Inisialisasi Singleton
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+// 3. Inisialisasi Firebase App dengan Proteksi SSR & Singleton Pattern
+const isBrowser = typeof window !== "undefined";
 
-// 4. Inisialisasi Layanan
-const auth = getAuth(app);
-const db = getFirestore(app);
-const storage = getStorage(app);
+let app;
+if (isBrowser || getApps().length > 0) {
+  app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+}
 
-// 5. Opsional: Mengaktifkan Firestore Persistence untuk pengalaman Offline
-// Dibalut dalam try-catch agar tidak crash di environment yang tidak mendukung
-if (typeof window !== 'undefined') {
-  enableIndexedDbPersistence(db).catch((err) => {
+// 4. Ekspor Layanan Firebase
+export const auth = app ? getAuth(app) : null;
+export const db = app ? getFirestore(app) : null;
+export const storage = app ? getStorage(app) : null;
+
+// 5. Aktifkan Offline Persistence (Hanya di Client-side Browser)
+if (isBrowser && db) {
+  enableMultiTabIndexedDbPersistence(db).catch((err) => {
     if (err.code === 'failed-precondition') {
-      console.warn("Firestore: Multiple tabs open, persistence disabled in secondary tabs.");
+      console.warn('[Firestore Persistence] Multi-tab persistence failed: Tab lain sedang aktif.');
     } else if (err.code === 'unimplemented') {
-      console.warn("Firestore: The current browser does not support persistence.");
+      console.warn('[Firestore Persistence] Browser ini tidak mendukung offline persistence.');
+    } else {
+      console.error('[Firestore Persistence Error]', err);
     }
   });
 }
 
-export { app, auth, db, storage };
+export default app;
